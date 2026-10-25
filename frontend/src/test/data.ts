@@ -62,6 +62,24 @@ export function mockCommon({ unread = 0 }: { unread?: number } = {}) {
   );
 }
 
+/** 詳情頁需要的 API（追蹤、baseline、價格）；回傳記錄 prices 請求 range 的陣列 */
+export function mockDetail(watch: Watch, baseline: Partial<Baseline> = {}) {
+  const ranges: string[] = [];
+  server.use(
+    http.get(`/api/v1/watches/${watch.public_id}`, () => HttpResponse.json(watch)),
+    http.get(`/api/v1/watches/${watch.public_id}/baseline`, () =>
+      HttpResponse.json({ ...emptyBaseline, ...baseline }),
+    ),
+    http.get(`/api/v1/watches/${watch.public_id}/prices`, ({ request }) => {
+      ranges.push(new URL(request.url).searchParams.get("range") ?? "");
+      return HttpResponse.json([
+        { observed_at: "2026-10-22T00:00:00Z", price: 9100, airline_iata: "BR" },
+      ]);
+    }),
+  );
+  return ranges;
+}
+
 export function mockWatches(watches: Watch[], baselines: Record<string, Partial<Baseline>> = {}) {
   server.use(
     http.get("/api/v1/watches", () => HttpResponse.json(watches)),

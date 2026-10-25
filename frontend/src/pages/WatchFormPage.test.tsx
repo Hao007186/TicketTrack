@@ -4,7 +4,7 @@ import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { addDays, todayInTaipei } from "../lib/format";
-import { makeWatch, mockCommon, mockWatches } from "../test/data";
+import { makeWatch, mockCommon, mockDetail, mockWatches } from "../test/data";
 import { demo } from "../test/fixtures";
 import { renderApp } from "../test/render";
 import { server } from "../test/server";
@@ -69,6 +69,7 @@ describe("新增追蹤", () => {
   it("排隊中時提示並導到詳情頁", async () => {
     mockCommon();
     const created = makeWatch({ status: "queued" });
+    mockDetail(created);
     let body: unknown;
     server.use(
       http.post("/api/v1/watches", async ({ request }) => {
@@ -103,7 +104,8 @@ describe("編輯追蹤", () => {
   it("改成單程時送出 return_date: null，沒改的欄位不送", async () => {
     mockCommon();
     const watch = makeWatch({ depart_date: DEPART, return_date: RETURN });
-    mockGetWatch(watch);
+    // 儲存後會導到詳情頁
+    mockDetail(watch);
     mockWatches([watch]);
     let body: unknown;
     server.use(

@@ -5,7 +5,9 @@ import { Layout } from "./components/Layout";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { WatchDetailPage } from "./pages/WatchDetailPage";
 import { WatchFormPage } from "./pages/WatchFormPage";
 import { WatchListPage } from "./pages/WatchListPage";
@@ -16,11 +18,6 @@ function RequireAuth() {
   if (!user)
     return <Navigate to={`/login?next=${encodeURIComponent(pathname + search)}`} replace />;
   return <Outlet />;
-}
-
-// 暫時的頁面，之後的 task 會換成真的
-function Placeholder({ title }: { title: string }) {
-  return <h1 className="text-xl font-semibold">{title}</h1>;
 }
 
 export function AppRoutes() {
@@ -35,8 +32,8 @@ export function AppRoutes() {
           <Route path="/watches/new" element={<WatchFormPage mode="create" />} />
           <Route path="/watches/:id" element={<WatchDetailPage />} />
           <Route path="/watches/:id/edit" element={<WatchFormPage mode="edit" />} />
-          <Route path="/notifications" element={<Placeholder title="通知" />} />
-          <Route path="/settings" element={<Placeholder title="設定" />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />

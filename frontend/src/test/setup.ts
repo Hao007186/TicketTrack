@@ -4,13 +4,23 @@ import { afterAll, afterEach, beforeAll } from "vitest";
 
 import { server } from "./server";
 
+// MSW 3 遇到沒有處理到的請求只會印錯誤；收集起來，在測試結束時讓它失敗，才不會漏掉少假造的 API
+const unhandled: string[] = [];
+
 beforeAll(() => {
   server.listen({ onUnhandledFrame: "error" });
+  server.events.on("request:unhandled", ({ request }) => {
+    unhandled.push(`${request.method} ${new URL(request.url).pathname}`);
+  });
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  // 等卸載前已經送出的請求跑完，再換掉 handler；否則會算到下一個測試頭上
+  await new Promise((resolve) => setTimeout(resolve, 20));
   server.resetHandlers();
+  const found = unhandled.splice(0);
+  if (found.length > 0) throw new Error(`沒有假造的 API 請求：${[...new Set(found)].join("、")}`);
 });
 
 afterAll(() => {

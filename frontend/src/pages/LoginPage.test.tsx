@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
+import { mockCommon, mockWatches } from "../test/data";
 import { alice } from "../test/fixtures";
 import { renderApp } from "../test/render";
 import { server } from "../test/server";
@@ -15,6 +16,7 @@ async function fillLogin(password = "correct-horse") {
 
 describe("登入頁", () => {
   it("登入後回到 next", async () => {
+    mockCommon();
     renderApp("/login?next=%2Fnotifications", { user: null });
     server.use(
       http.post("/api/v1/auth/login", () =>
@@ -39,6 +41,8 @@ describe("登入頁", () => {
   });
 
   it("已登入時開登入頁會導到我的追蹤", async () => {
+    mockCommon();
+    mockWatches([]);
     renderApp("/login", { user: alice });
     expect(await screen.findByRole("heading", { name: "我的追蹤" })).toBeInTheDocument();
   });

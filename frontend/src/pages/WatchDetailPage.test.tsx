@@ -4,30 +4,16 @@ import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
 import type { components } from "../api/schema";
-import { emptyBaseline, makeWatch, mockCommon, mockWatches } from "../test/data";
+import { makeWatch, mockCommon, mockDetail as mockDetailApis, mockWatches } from "../test/data";
 import { renderApp } from "../test/render";
 import { server } from "../test/server";
 
 type Watch = components["schemas"]["WatchOut"];
 type Baseline = components["schemas"]["BaselineOut"];
 
-/** 佈置詳情頁需要的 API；回傳記錄 prices 請求 range 的陣列 */
 function mockDetail(watch: Watch, baseline: Partial<Baseline> = {}) {
-  const ranges: string[] = [];
   mockCommon();
-  server.use(
-    http.get(`/api/v1/watches/${watch.public_id}`, () => HttpResponse.json(watch)),
-    http.get(`/api/v1/watches/${watch.public_id}/baseline`, () =>
-      HttpResponse.json({ ...emptyBaseline, ...baseline }),
-    ),
-    http.get(`/api/v1/watches/${watch.public_id}/prices`, ({ request }) => {
-      ranges.push(new URL(request.url).searchParams.get("range") ?? "");
-      return HttpResponse.json([
-        { observed_at: "2026-10-22T00:00:00Z", price: 9100, airline_iata: "BR" },
-      ]);
-    }),
-  );
-  return ranges;
+  return mockDetailApis(watch, baseline);
 }
 
 describe("追蹤詳情", () => {

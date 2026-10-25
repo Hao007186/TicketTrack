@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, unwrap } from "./client";
 import type { components } from "./schema";
@@ -143,6 +143,52 @@ export function useMarkRead() {
         }),
       ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.notifications }),
+  });
+}
+
+const NOTIFICATION_PAGE_SIZE = 20;
+
+export function useNotificationPages() {
+  return useInfiniteQuery({
+    queryKey: [...keys.notifications, "list"],
+    queryFn: async ({ pageParam }) =>
+      unwrap(
+        await api.GET("/api/v1/notifications", {
+          params: { query: { limit: NOTIFICATION_PAGE_SIZE, before: pageParam } },
+        }),
+      ),
+    initialPageParam: undefined as string | undefined,
+    // 剛好滿一頁才可能還有下一頁；用最後一則的 id 當 before
+    getNextPageParam: (last) =>
+      last.items.length === NOTIFICATION_PAGE_SIZE ? last.items.at(-1)?.id : undefined,
+  });
+}
+
+export function useMarkAllRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => unwrap(await api.POST("/api/v1/notifications/read-all")),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.notifications }),
+  });
+}
+
+export function useNotificationSettings() {
+  return useQuery({
+    queryKey: keys.settings,
+    queryFn: async () => unwrap(await api.GET("/api/v1/me/notification-settings")),
+  });
+}
+
+export function useUpdateNotificationSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (emailEnabled: boolean) =>
+      unwrap(
+        await api.PATCH("/api/v1/me/notification-settings", {
+          body: { email_enabled: emailEnabled },
+        }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.settings }),
   });
 }
 
