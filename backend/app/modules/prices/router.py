@@ -58,6 +58,7 @@ async def get_baseline(public_id: uuid.UUID, user: CurrentUser, session: Session
     return BaselineOut(
         latest_price=latest.price if latest else None,
         latest_observed_at=latest.observed_at if latest else None,
+        latest_booking_url=latest.booking_url if latest else None,
         last_checked_at=watch.price_query.last_checked_at,
         typical_low=baseline.typical_low if baseline else None,
         typical_high=baseline.typical_high if baseline else None,

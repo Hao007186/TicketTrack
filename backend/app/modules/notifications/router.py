@@ -19,6 +19,7 @@ from app.modules.notifications.schemas import (
 from app.modules.notifications.service import email_enabled
 from app.modules.prices.models import PriceSnapshot
 from app.modules.users.models import User
+from app.modules.watches.models import Watch
 
 router = APIRouter(tags=["notifications"])
 
@@ -55,10 +56,14 @@ async def list_notifications(
     unread_only: bool = False,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     before: uuid.UUID | None = None,
+    watch_id: uuid.UUID | None = None,
 ) -> NotificationPage:
     stmt = _with_booking_url(user)
     if unread_only:
         stmt = stmt.where(Notification.is_read.is_(False))
+    if watch_id is not None:
+        # 只有價格通知對得到追蹤；別人的或不存在的追蹤自然查不到，回空清單
+        stmt = stmt.join(Watch, Watch.id == Alert.watch_id).where(Watch.public_id == watch_id)
     if before is not None:
         cursor = (
             await session.execute(

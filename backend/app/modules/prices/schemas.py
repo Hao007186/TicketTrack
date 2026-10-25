@@ -15,6 +15,7 @@ class PricePoint(BaseModel):
 class BaselineOut(BaseModel):
     latest_price: int | None
     latest_observed_at: datetime | None
+    latest_booking_url: str | None
     last_checked_at: datetime | None
     typical_low: int | None
     typical_high: int | None

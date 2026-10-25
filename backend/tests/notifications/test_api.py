@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from httpx import AsyncClient
@@ -149,6 +150,39 @@ async def test_booking_url(client: AsyncClient, db_session: AsyncSession) -> Non
     assert len(items) == 2
     assert items[0]["booking_url"] is None
     assert items[0]["link"] == f"/watches/{watch.public_id}"
+
+
+async def test_filter_by_watch(client: AsyncClient, db_session: AsyncSession) -> None:
+    headers = await auth_headers(client, db_session)
+    alice = await _user(db_session)
+    first = await _price_alert(db_session, alice)
+    await _price_alert(db_session, alice)
+    await _note(db_session, alice)
+
+    body = (
+        await client.get(URL, headers=headers, params={"watch_id": str(first.public_id)})
+    ).json()
+    assert [n["link"] for n in body["items"]] == [f"/watches/{first.public_id}"]
+    # 未讀數仍是全部的未讀通知，鈴鐺不受篩選影響
+    assert body["unread_count"] == 3
+
+
+async def test_filter_by_others_watch(client: AsyncClient, db_session: AsyncSession) -> None:
+    headers = await auth_headers(client, db_session)
+    bob = await create_user(db_session, email="bob@example.com")
+    bobs = await _price_alert(db_session, bob)
+    await _price_alert(db_session, await _user(db_session))
+    resp = await client.get(URL, headers=headers, params={"watch_id": str(bobs.public_id)})
+    assert resp.status_code == 200
+    assert resp.json()["items"] == []
+
+
+async def test_filter_by_unknown_watch(client: AsyncClient, db_session: AsyncSession) -> None:
+    headers = await auth_headers(client, db_session)
+    await _price_alert(db_session, await _user(db_session))
+    resp = await client.get(URL, headers=headers, params={"watch_id": str(uuid.uuid4())})
+    assert resp.status_code == 200
+    assert resp.json()["items"] == []
 
 
 async def test_mark_read(client: AsyncClient, db_session: AsyncSession) -> None:

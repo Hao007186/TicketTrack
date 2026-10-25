@@ -307,7 +307,7 @@ erDiagram
 - Auth：`POST /auth/register|login|refresh|logout|demo`、`GET /me`
 - LINE：`GET /me/line/link`、`GET /auth/line/callback`、`GET/DELETE /me/line`、`POST /line/webhook`
 - Watches：`GET/POST /watches`（`?status=` 篩選）、`GET/PATCH/DELETE /watches/{id}`（PATCH 也用來暫停／恢復）、`GET /watches/{id}/prices?range=`、`GET /watches/{id}/baseline`
-- 通知：`GET /notifications`、`PATCH /notifications/{id}/read`、`POST /notifications/read-all`、`GET/PATCH /me/notification-settings`
+- 通知：`GET /notifications`（`?watch_id=` 篩選某個追蹤的價格通知）、`PATCH /notifications/{id}/read`、`POST /notifications/read-all`、`GET/PATCH /me/notification-settings`
 - 參考資料：`GET /airports`、`GET /airlines`；Admin：`GET /admin/usage`
 - 健康檢查：`GET /health`
 
