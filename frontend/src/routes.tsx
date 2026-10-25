@@ -6,6 +6,7 @@ import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { WatchFormPage } from "./pages/WatchFormPage";
 import { WatchListPage } from "./pages/WatchListPage";
 
 function RequireAuth() {
@@ -30,9 +31,9 @@ export function AppRoutes() {
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route path="/watches" element={<WatchListPage />} />
-          <Route path="/watches/new" element={<Placeholder title="新增追蹤" />} />
+          <Route path="/watches/new" element={<WatchFormPage mode="create" />} />
           <Route path="/watches/:id" element={<Placeholder title="追蹤詳情" />} />
-          <Route path="/watches/:id/edit" element={<Placeholder title="編輯追蹤" />} />
+          <Route path="/watches/:id/edit" element={<WatchFormPage mode="edit" />} />
           <Route path="/notifications" element={<Placeholder title="通知" />} />
           <Route path="/settings" element={<Placeholder title="設定" />} />
         </Route>
