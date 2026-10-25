@@ -63,15 +63,20 @@ function parseTargetPrice(raw: string): number | null {
   return n >= 1 && n <= MAX_TARGET_PRICE ? n : null;
 }
 
-/** today 是台灣時間的 YYYY-MM-DD；日期字串格式固定，直接比字串就是比日期。 */
-export function validate(v: WatchFormValues, today: string): FormErrors {
+/**
+ * today 是台灣時間的 YYYY-MM-DD；日期字串格式固定，直接比字串就是比日期。
+ * 編輯時（有 original）日期沒改就不檢查範圍：快出發的追蹤仍要能改目標價，後端也只在條件有變時才檢查。
+ */
+export function validate(v: WatchFormValues, today: string, original?: Watch): FormErrors {
   const errors: FormErrors = {};
   const { earliest, latest } = dateRange(today);
+  const departUnchanged = original !== undefined && v.departDate === original.depart_date;
+  const returnUnchanged = original !== undefined && v.returnDate === (original.return_date ?? "");
 
   if (!v.destination) errors.destination = "請選擇目的地";
   else if (v.destination === v.origin) errors.destination = "目的地不能和出發地相同";
 
-  if (!v.departDate || v.departDate < earliest || v.departDate > latest) {
+  if (!v.departDate || (!departUnchanged && (v.departDate < earliest || v.departDate > latest))) {
     errors.departDate = `出發日必須在 ${earliest} 到 ${latest} 之間`;
   }
 
@@ -79,7 +84,8 @@ export function validate(v: WatchFormValues, today: string): FormErrors {
     if (!v.returnDate) errors.returnDate = "請選擇回程日";
     else if (v.departDate && v.returnDate < v.departDate)
       errors.returnDate = "回程日不能早於出發日";
-    else if (v.returnDate > latest) errors.returnDate = `回程日不能晚於 ${latest}`;
+    else if (!returnUnchanged && v.returnDate > latest)
+      errors.returnDate = `回程日不能晚於 ${latest}`;
   }
 
   if (parseTargetPrice(v.targetPrice) === null) {

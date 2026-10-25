@@ -9,9 +9,8 @@ import { renderApp } from "../test/render";
 describe("WriteButton", () => {
   it("示範帳號時不能按並說明原因", async () => {
     mockCommon();
-    mockWatches([]);
-    renderApp("/watches", { user: demo });
-    const button = await screen.findByRole("button", { name: "新增追蹤" });
+    renderApp("/watches/new", { user: demo });
+    const button = await screen.findByRole("button", { name: "建立追蹤" });
     expect(button).toBeDisabled();
     expect(button).toHaveAccessibleDescription("示範帳號無法修改");
   });

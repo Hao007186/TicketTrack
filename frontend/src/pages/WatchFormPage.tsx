@@ -103,6 +103,8 @@ function WatchForm({ original }: { original?: Watch }) {
 
   const today = todayInTaipei();
   const { earliest, latest } = dateRange(today);
+  // 快出發的追蹤原本的出發日可能早於 earliest，保留它才不會被日期欄位標成不合法
+  const minDepart = original && original.depart_date < earliest ? original.depart_date : earliest;
   const origins = airports.filter((a) => a.is_origin);
   const destinations = groupByCountry(airports.filter((a) => !a.is_origin));
   const busy = create.isPending || update.isPending;
@@ -122,7 +124,7 @@ function WatchForm({ original }: { original?: Watch }) {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const found = validate(values, today);
+    const found = validate(values, today, original);
     setErrors(found);
     setSubmitError(null);
     if (Object.keys(found).length > 0) return;
@@ -210,7 +212,7 @@ function WatchForm({ original }: { original?: Watch }) {
             id="depart-date"
             type="date"
             className={input}
-            min={earliest}
+            min={minDepart}
             max={latest}
             value={values.departDate}
             onChange={(e) => set("departDate", e.target.value)}
@@ -222,7 +224,7 @@ function WatchForm({ original }: { original?: Watch }) {
               id="return-date"
               type="date"
               className={input}
-              min={values.departDate || earliest}
+              min={values.departDate || minDepart}
               max={latest}
               value={values.returnDate}
               onChange={(e) => set("returnDate", e.target.value)}

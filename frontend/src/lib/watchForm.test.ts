@@ -61,6 +61,17 @@ describe("validate", () => {
     expect(validate(valid({ tripType: "one_way", returnDate: "" }), TODAY)).toEqual({});
   });
 
+  it("編輯時日期沒改就不檢查範圍，快出發的追蹤仍可改目標價", () => {
+    // 後端只在查價條件有變時才檢查日期範圍；出發日過了才會變成已過期
+    const original = makeWatch({ depart_date: "2026-10-27", return_date: "2026-10-30" });
+    const values = { ...fromWatch(original), targetPrice: "8000" };
+    expect(validate(values, TODAY, original)).toEqual({});
+    // 改了日期還是要檢查
+    expect(validate({ ...values, departDate: "2026-10-26" }, TODAY, original).departDate).toBe(
+      "出發日必須在 2026-10-28 到 2027-09-20 之間",
+    );
+  });
+
   it("目標價要是 1 到 1,000,000 的整數", () => {
     for (const targetPrice of ["0", "9.5", "", "abc", "1000001"]) {
       expect(validate(valid({ targetPrice }), TODAY).targetPrice).toBe(

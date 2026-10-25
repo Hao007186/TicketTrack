@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
@@ -46,6 +46,17 @@ describe("我的追蹤", () => {
     renderApp("/watches");
     expect(await screen.findByText("名額已滿")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "新增追蹤" })).toBeDisabled();
+  });
+
+  it("示範帳號可以打開新增表單看欄位", async () => {
+    mockCommon();
+    // 示範帳號名額已滿也一樣：只是看表單，送出按鈕本來就不能按
+    mockWatches([makeWatch(), makeWatch(), makeWatch()]);
+    renderApp("/watches", { user: demo });
+    const button = await screen.findByRole("button", { name: "新增追蹤" });
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+    expect(await screen.findByRole("button", { name: "建立追蹤" })).toBeDisabled();
   });
 
   it("示範帳號看得到唯讀提示", async () => {

@@ -4,7 +4,7 @@ import { useAirports, useBaseline, useWatches, type Watch } from "../api/queries
 import { QueryError } from "../components/QueryError";
 import { StatusBadge } from "../components/StatusBadge";
 import { buttonPrimary, card } from "../components/ui";
-import { WriteButton } from "../components/WriteButton";
+import { useAuth } from "../auth/context";
 import { routeLabel } from "../lib/airports";
 import { formatPrice } from "../lib/format";
 
@@ -55,6 +55,7 @@ function WatchCard({ watch }: { watch: Watch }) {
 
 export function WatchListPage() {
   const navigate = useNavigate();
+  const { isDemo } = useAuth();
   const [params, setParams] = useSearchParams();
   const history = params.get("tab") === "history";
   const { data: watches, error, refetch, isPending } = useWatches();
@@ -78,14 +79,16 @@ export function WatchListPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {full && <span className="text-sm text-slate-500">名額已滿</span>}
-          <WriteButton
+          {/* 示範帳號可以打開表單看欄位（送出按鈕才不能按），所以這裡不用 WriteButton，也不受名額限制 */}
+          {full && !isDemo && <span className="text-sm text-slate-500">名額已滿</span>}
+          <button
+            type="button"
             className={buttonPrimary}
-            disabled={full || isPending}
+            disabled={isPending || (full && !isDemo)}
             onClick={() => navigate("/watches/new")}
           >
             新增追蹤
-          </WriteButton>
+          </button>
         </div>
       </div>
 
