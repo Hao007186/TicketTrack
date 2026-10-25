@@ -69,10 +69,13 @@ async def test_baseline(client: AsyncClient, db_session: AsyncSession) -> None:
         .where(PriceQuery.id == watch.price_query_id)
         .values(last_checked_at=checked_at)
     )
+    older, newer = _snapshot(watch, 2, 9100), _snapshot(watch, 1, 8800)
+    older.booking_url = "https://example.test/older"
+    newer.booking_url = "https://example.test/newer"
     db_session.add_all(
         [
-            _snapshot(watch, 2, 9100),
-            _snapshot(watch, 1, 8800),
+            older,
+            newer,
             PriceBaseline(
                 price_query_id=watch.price_query_id,
                 typical_low=6400,
@@ -88,6 +91,7 @@ async def test_baseline(client: AsyncClient, db_session: AsyncSession) -> None:
     body = (await client.get(f"{URL}/{watch.public_id}/baseline", headers=headers)).json()
     assert body["latest_price"] == 8800
     assert body["latest_observed_at"] is not None
+    assert body["latest_booking_url"] == "https://example.test/newer"
     assert datetime.fromisoformat(body["last_checked_at"]) == checked_at
     assert (body["typical_low"], body["typical_high"], body["record_low"]) == (6400, 12500, 8000)
     assert body["history_ready"] is True
@@ -100,6 +104,7 @@ async def test_baseline_empty(client: AsyncClient, db_session: AsyncSession) -> 
     assert body == {
         "latest_price": None,
         "latest_observed_at": None,
+        "latest_booking_url": None,
         "last_checked_at": None,
         "typical_low": None,
         "typical_high": None,

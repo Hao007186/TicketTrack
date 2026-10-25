@@ -40,6 +40,30 @@ jobs:
       - run: uv run ruff format --check
       - run: uv run mypy
       - run: uv run pytest -v
+      # 前端型別由 openapi.json 產生；後端改了 API 卻沒更新它時擋下
+      - run: uv run python scripts/export_openapi.py
+      - run: git diff --exit-code ../frontend/openapi.json
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      # 型別檔要和 openapi.json 一致，避免改了 API 卻忘記重新產生
+      - run: npm run gen:api
+      - run: git diff --exit-code src/api/schema.d.ts
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
 
   docker-build:
     runs-on: ubuntu-latest
