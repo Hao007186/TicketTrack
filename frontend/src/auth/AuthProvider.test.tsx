@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
+import { mockCommon } from "../test/data";
 import { alice } from "../test/fixtures";
 import { renderApp } from "../test/render";
 import { server } from "../test/server";
@@ -30,8 +31,10 @@ describe("登入狀態", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
+    mockCommon();
     renderApp("/settings", { user: alice });
-    await userEvent.click(await screen.findByRole("button", { name: "登出" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Alice" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "登出" }));
     expect(await screen.findByRole("button", { name: "以示範帳號瀏覽" })).toBeInTheDocument();
     expect(loggedOut).toBe(true);
   });

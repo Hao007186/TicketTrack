@@ -14,6 +14,11 @@ describe("toApiError", () => {
     expect(toApiError(422, { detail: [{ msg: "A" }, { msg: "B" }] }).message).toBe("A；B");
   });
 
+  it("5xx 一律顯示連線失敗，不露出後端的內部訊息", () => {
+    expect(toApiError(500, { detail: "boom" }).message).toBe("連線失敗，請稍後再試");
+    expect(toApiError(503, { detail: "示範帳號尚未建立" }).status).toBe(503);
+  });
+
   it("沒有 detail 時依 status 給預設訊息", () => {
     expect(toApiError(403, undefined).message).toBe("示範帳號無法修改");
     expect(toApiError(404, {}).message).toBe("找不到資料");

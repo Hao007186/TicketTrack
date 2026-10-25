@@ -33,6 +33,8 @@ function detailMessage(body: unknown): string | null {
 }
 
 export function toApiError(status: number, body: unknown): ApiError {
+  // 5xx 的內容是後端內部的訊息，不顯示給使用者；需要特別說明的（例如 503）由畫面看 status 處理
+  if (status >= 500) return new ApiError(status, NETWORK_ERROR);
   return new ApiError(status, detailMessage(body) ?? DEFAULT_MESSAGES[status] ?? NETWORK_ERROR);
 }
 
