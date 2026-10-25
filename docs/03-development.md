@@ -10,7 +10,7 @@ Project_TicketTrack/
 │  ├─ modules/{auth,users,watches,prices,providers,alerts,notifications,email,line,admin}/   # 每個模組：router / schemas / models / service
 │  ├─ handlers/{api.py,checker.py,notifier.py}                                              # Lambda 進入點
 │  └─ alembic/  seeds/（示範帳號資料）  tests/  Dockerfile
-├─ frontend/  src/{pages,components,api,hooks}  Dockerfile
+├─ frontend/  src/{pages,components,api,auth,lib,test}  openapi.json   # Dockerfile 在 M3 k8s 時再加
 ├─ deploy/  docker-compose.yml（api + postgres + frontend + MailHog + LocalStack）  helm/farewatch/
 ├─ infra/terraform/  （ECR、Lambda + Function URL、EventBridge、SQS、S3、CloudFront、ACM、SSM、IAM、CloudWatch、Budgets、Cloudflare DNS）
 ├─ .github/  workflows/  pull_request_template.md
@@ -18,11 +18,17 @@ Project_TicketTrack/
 ```
 
 ## 開發規範
-- **分支策略：** GitHub Flow。`main` 隨時可部署；功能分支 `feat/*`、`fix/*` → PR → CI 全綠才能 merge（branch protection：需 PR、0 approvals、CI 的 `backend` 與 `docker-build` 必須通過）
+- **分支策略：** GitHub Flow。`main` 隨時可部署；功能分支 `feat/*`、`fix/*` → PR → CI 全綠才能 merge（branch protection：需 PR、0 approvals、CI 的 `backend`、`frontend` 與 `docker-build` 必須通過）
 - **Commit 格式：** Conventional Commits（`feat:`、`fix:`、`docs:`…），方便自動產生 CHANGELOG
 - **程式碼品質：** 後端 ruff + mypy，前端 eslint + prettier；pre-commit hook 在本機先檢查
 - **設定管理：** 12-Factor，所有設定走環境變數；`.env.example` 進 Git，`.env` 不進 Git
 - **追蹤進度：** GitHub Issues + Projects 看板，每個使用者故事一張卡，依里程碑分組
+- **API 型別：** 前端的型別由後端的 OpenAPI 產生，CI 會檢查兩邊一致；後端改了 API 要依序執行 `backend/` 的 `uv run python scripts/export_openapi.py` 和 `frontend/` 的 `npm run gen:api`
+
+## 本機開發
+1. `docker compose -f deploy/docker-compose.yml up`：啟動後端（`localhost:8000`）和資料庫
+2. `cd frontend && npm install && npm run dev`：啟動前端，打開 `http://localhost:5173`
+3. Vite 開發伺服器把 `/api` 轉給後端，對瀏覽器來說頁面和 API 在同一個網域，和正式環境的 CloudFront 一樣，後端不用開 CORS
 
 ## 實作順序（依里程碑）
 

@@ -1,7 +1,7 @@
 # M1 子專案 #6：前端 — 設計
 
 日期：2026-10-25
-狀態：待審閱
+狀態：已實作
 相關文件：[architecture.md](../../architecture.md)、[02-design.md](../../02-design.md)、[#2 帳號系統設計](2026-10-23-m1-auth-design.md)、[#3 追蹤功能設計](2026-10-23-m1-watches-design.md)、[#4 查價設計](2026-10-23-m1-prices-design.md)、[#5 通知設計](2026-10-24-m1-alerts-design.md)
 
 ## 背景與目標
@@ -194,7 +194,7 @@ backend/scripts/export_openapi.py   不連資料庫，輸出 app.openapi() 到 f
 
 ## CI
 新增 `frontend` job（`working-directory: frontend`）：
-1. `actions/setup-node`（Node 22 LTS，npm 快取）
+1. `actions/setup-node`（Node 24 LTS，npm 快取）
 2. `npm ci`
 3. `npm run gen:api` 後 `git diff --exit-code src/api/schema.d.ts`
 4. `npm run lint`、`npm run typecheck`、`npm test`、`npm run build`
@@ -204,7 +204,7 @@ backend job 新增一步：`uv run python scripts/export_openapi.py` 後 `git di
 `frontend` job 要加進 main 的 branch protection 必須通過的檢查，由使用者在 GitHub 設定。
 
 ## 本機開發
-1. 安裝 Node.js 22 LTS（實作計畫的第一步會寫出安裝方式）
+1. 安裝 Node.js 24 LTS（`winget install OpenJS.NodeJS.LTS`）
 2. `docker compose -f deploy/docker-compose.yml up` 啟動後端和資料庫
 3. `cd frontend && npm install && npm run dev`，打開 `http://localhost:5173`
 4. 後端 API 有改時：`uv run python scripts/export_openapi.py` → `npm run gen:api`

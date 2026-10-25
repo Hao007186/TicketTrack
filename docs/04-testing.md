@@ -5,7 +5,7 @@
 ## 測試金字塔
 | 層級 | 工具 | 範圍 | 目標 |
 |---|---|---|---|
-| 單元測試 | pytest、Vitest | 價格基準、觸發規則與狀態轉換、額度預算計算、查詢合併、JWT、元件 | 核心邏輯（prices、alerts）覆蓋率 ≥ 90%，整體 ≥ 70% |
+| 單元測試 | pytest、Vitest + Testing Library + MSW（假造 API 回應，前端測試不連後端） | 價格基準、觸發規則與狀態轉換、額度預算計算、查詢合併、JWT、元件 | 核心邏輯（prices、alerts）覆蓋率 ≥ 90%，整體 ≥ 70% |
 | 整合測試 | pytest + 真實 Postgres（CI service container）、httpx mock 外部 API | API 端點、DB 交易、Alembic migration、LINE 簽章驗證、來源驗證標頭 | 每個端點都有正常、錯誤和權限案例 |
 | 契約測試 | 錄製的 SerpApi 回應（fixtures，含有／沒有 `price_insights` 兩種） | adapter 能正確解析真實格式 | 供應商改格式時能及早發現 |
 | E2E 測試 | **Playwright**（M3） | 註冊 → 建立追蹤 → mock 降價 → 通知中心出現通知；示範帳號瀏覽 | 核心流程 3–5 條 |
