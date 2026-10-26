@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     email_from: str | None = None
     # 信中「查看追蹤」連結的開頭（前端網址）
     app_base_url: str = "http://localhost:5173"
+    # CloudFront 轉送時帶的 X-Origin-Verify 密碼；沒設就不檢查（本機）
+    origin_verify_secret: SecretStr | None = None
 
     @field_validator("database_url")
     @classmethod
@@ -48,6 +50,13 @@ class Settings(BaseSettings):
     def _serpapi_needs_key(self) -> Self:
         if self.price_provider == "serpapi" and self.serpapi_key is None:
             raise ValueError("PRICE_PROVIDER=serpapi 時必須設定 SERPAPI_KEY")
+        return self
+
+    @model_validator(mode="after")
+    def _prod_needs_real_base_url(self) -> Self:
+        # 信裡的連結用這個網址，正式環境還是 localhost 的話連結會壞掉
+        if self.env == "prod" and "localhost" in self.app_base_url:
+            raise ValueError("ENV=prod 時 APP_BASE_URL 必須是正式網址，不能是 localhost")
         return self
 
     @model_validator(mode="after")

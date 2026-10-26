@@ -1,5 +1,12 @@
+from collections.abc import Iterator
+
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.pool import NullPool
+
+from app.core.config import get_settings
+from app.db.session import get_engine
 
 
 async def test_select_one(db_session: AsyncSession) -> None:
@@ -20,3 +27,26 @@ async def test_rollback_isolation_part1(db_session: AsyncSession) -> None:
 async def test_rollback_isolation_part2(db_session: AsyncSession) -> None:
     exists = (await db_session.execute(text("SELECT to_regclass('_iso_probe')"))).scalar_one()
     assert exists is None
+
+
+@pytest.fixture
+def fresh_engine_cache() -> Iterator[None]:
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+    yield
+    # 還原成測試環境的設定與 engine
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+
+
+@pytest.mark.usefixtures("fresh_engine_cache")
+def test_prod_engine_uses_null_pool(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENV", "prod")
+    monkeypatch.setenv("APP_BASE_URL", "https://farewatch.example")
+    assert isinstance(get_engine().pool, NullPool)
+
+
+@pytest.mark.usefixtures("fresh_engine_cache")
+def test_local_engine_is_pooled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ENV", raising=False)
+    assert not isinstance(get_engine().pool, NullPool)
