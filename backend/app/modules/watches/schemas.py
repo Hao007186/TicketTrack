@@ -11,14 +11,15 @@ def _upper_codes(codes: list[str]) -> list[str]:
     return sorted({c.strip().upper() for c in codes})
 
 
-class WatchCreate(BaseModel):
+class QueryConditionsIn(BaseModel):
+    """查價條件（不含目標價）；建立追蹤和查參考價共用。"""
+
     origin: str = Field(min_length=3, max_length=3)
     destination: str = Field(min_length=3, max_length=3)
     depart_date: date
     return_date: date | None = None
     cabin: Cabin = "economy"
     adults: int = Field(default=1, ge=1, le=9)
-    target_price: int = Field(ge=1, le=1_000_000)
     airlines: list[str] = []
 
     @field_validator("origin", "destination")
@@ -38,6 +39,10 @@ class WatchCreate(BaseModel):
         if self.return_date is not None and self.return_date < self.depart_date:
             raise ValueError("回程日不能早於出發日")
         return self
+
+
+class WatchCreate(QueryConditionsIn):
+    target_price: int = Field(ge=1, le=1_000_000)
 
 
 class WatchUpdate(BaseModel):
