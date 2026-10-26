@@ -17,6 +17,7 @@
 - 2026-10-23 確定查價、額度預算與 API key 保護，並用真實回應確認指定航空公司的情況，見文末〈2026-10-23 #4 決策紀錄〉
 - 2026-10-24 確定寄信服務（Resend，走 SMTP）與通知的寄件匣流程，見文末〈2026-10-24 #5 決策紀錄〉
 - 2026-10-26 拿掉 SQS，Lambda 改成 api 與 jobs 兩個，見文末〈2026-10-26 #7a 決策紀錄〉
+- 2026-10-26 寄信改用 SES API、確定網域與正式環境的 Terraform 設計，見文末〈2026-10-26 #7b 決策紀錄〉；部署步驟見[部署手冊](deploy-runbook.md)
 
 ## 文件索引
 | 階段 | 文件 | 內容 |
@@ -42,7 +43,7 @@ flowchart TB
 
     sched["EventBridge Scheduler（每天查價、查價後重寄兩次、每天維護）"] --> jobs["Lambda: jobs（查價、重寄、維護）"]
     jobs --> serp["SerpApi Google Flights"]
-    jobs --> email["Email（SMTP）"]
+    jobs --> email["Email（SES API，noreply@hao007186.com）"]
     jobs --> lineapi["LINE Messaging API（M2）"]
 
     api --> db[("Neon PostgreSQL（新加坡區，pooler）")]
@@ -56,7 +57,7 @@ flowchart TB
 ## 里程碑
 | 里程碑 | 內容 |
 |---|---|
-| M0 | 前置驗證：Travelpayouts 小實驗（已完成，結論是不採用）、SerpApi 小實驗（已完成）、網域、DNS（寄信服務在 M1 #5 決定用 Resend） |
+| M0 | 前置驗證：Travelpayouts 小實驗（已完成，結論是不採用）、SerpApi 小實驗（已完成）、網域、DNS（寄信服務在 M1 #7b 定為 SES） |
 | M1 | MVP 上線：帳號、追蹤、查價、站內通知與 Email、前端、Terraform 部署 |
 | M2 | LINE 綁定與推播 |
 | M3 | k8s（kind + Helm）與 Playwright E2E |
@@ -187,6 +188,18 @@ flowchart TB
 | 3 | 機密怎麼給 Lambda | 冷啟動時讀 SSM 指定路徑下的參數寫進環境變數；不放 Lambda 環境變數，也不進 Terraform state |
 | 4 | 正式環境的 DB 連線池 | `ENV=prod` 用 NullPool；Lambda 凍結後連線常已斷，連線池交給 Neon pooler |
 | 5 | 請求大小 | 上限 64 KB，超過回 413 |
+
+## 2026-10-26 #7b 決策紀錄
+| # | 問題 | 決定 |
+|---|---|---|
+| 1 | 寄信服務（修正 2026-10-24 #5 決策紀錄第 1 項的 Resend） | AWS 帳號已可用，改用 **SES API**：jobs Lambda 靠 IAM 權限寄信，不需要任何長期密碼；SMTP 寄信器保留當備援 |
+| 2 | 網址 | 網站放根網域 `https://hao007186.com`，寄件人 `noreply@hao007186.com`，MAIL FROM `mail.hao007186.com` |
+| 3 | 本機怎麼登入 AWS | IAM Identity Center（`aws sso login`），電腦上只有臨時金鑰 |
+| 4 | Cloudflare 要不要代理 | DNS only；CloudFront 已經是 CDN |
+| 5 | 前端網址（例如 `/watches/123`）在 S3 沒有檔案 | CloudFront Function 把沒有副檔名的路徑改寫成 `/index.html`；不用 CloudFront 的自訂錯誤回應，因為它會連 API 的 404 也改掉 |
+| 6 | 機密與 Terraform state | 只有 `origin_verify_secret` 由 Terraform 產生；資料庫網址、JWT 密鑰、SerpApi key 由使用者用 AWS CLI 放進 SSM，不進 state |
+| 7 | 排程時間（台灣時間） | 08:00 查價、09:00 與 11:00 重寄、00:10 維護；排程不自動重試，避免重複花 SerpApi 額度 |
+| 8 | state 的鎖 | S3 backend 原生鎖（`use_lockfile`），不需要 DynamoDB |
 
 ---
 

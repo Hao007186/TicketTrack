@@ -12,7 +12,7 @@
 | 容器 | 同一份 backend Dockerfile（AWS Lambda Python 基底）建出**單一架構** image：arm64 推到 **ECR** 給 Lambda，amd64 只在本機和 CI 建給 kind 用；frontend 用 Nginx image（只給 k8s 用） | Lambda 不接受 multi-arch manifest，build 時要加 `--provenance=false`；見下方〈容器執行方式〉 |
 | k8s | **本機 kind + CI 驗證**，用 Helm chart 部署 | 單人維護正式環境的 k8s 成本高；用來學習和展示 |
 | 網域／DNS | 自有網域，DNS 放 **Cloudflare**（免費） | Route 53 每月 US$0.50；Terraform 有 Cloudflare provider |
-| Email | **SMTP**，寄信服務用 **Resend**（驗證自有網域 + DKIM／SPF）；本機預設 console 寄信器（只印 log） | 用 `EmailSender` 介面抽象化；Resend、Gmail、SES 都支援 SMTP，切換只改設定，也不依賴 AWS 帳號 |
+| Email | 正式環境用 **SES API**（`SesEmailSender`，靠 jobs Lambda 的 IAM 權限，自有網域 + Easy DKIM + 自訂 MAIL FROM）；本機預設 console 寄信器（只印 log）；SMTP 寄信器保留當備援 | 不需要任何長期密碼；`EmailSender` 介面讓三種寄信器只差設定（見 [#7b 決策紀錄](architecture.md#2026-10-26-7b-決策紀錄)） |
 | IaC | Terraform（state 存 S3） | 一鍵建立／刪除所有資源 |
 
 ## 容器執行方式
@@ -25,7 +25,8 @@
 架構圖放在[總覽的〈系統架構圖〉](architecture.md#系統架構圖)，以下是各條路徑的細節。
 
 ```
-使用者 ──► Cloudflare DNS（自有網域）──► CloudFront（ACM 憑證）──► S3（React 靜態檔）
+使用者 ──► Cloudflare DNS（hao007186.com，DNS only）──► CloudFront（ACM 憑證，us-east-1）──► S3（React 靜態檔，只有 CloudFront 能讀）
+                                              │ 前端網址（沒有副檔名）由 CloudFront Function 改寫成 /index.html
                                               │ /api/*、/line/webhook
                                               │ 轉發時加上 X-Origin-Verify 密鑰標頭
                                               ▼

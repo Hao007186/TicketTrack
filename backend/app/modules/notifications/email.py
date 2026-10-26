@@ -48,7 +48,7 @@ class ConsoleEmailSender:
 
 
 class SmtpEmailSender:
-    """STARTTLS + 帳密登入；Resend、Gmail、SES 都是同一份程式，只差設定。"""
+    """STARTTLS + 帳密登入；支援 SMTP 的寄信服務（Gmail、Resend 等）都用這份，只差設定。"""
 
     def __init__(
         self,

@@ -11,7 +11,8 @@ Project_TicketTrack/
 │  ├─ lambda_handlers.py（api_handler、jobs_handler）  jobs/（查價、重寄、維護）             # Lambda 進入點
 │  └─ alembic/  seeds/（示範帳號資料）  tests/  Dockerfile
 ├─ frontend/  src/{pages,components,api,auth,lib,test}  openapi.json   # Dockerfile 在 M3 k8s 時再加
-├─ deploy/  docker-compose.yml（api + postgres + frontend + MailHog + LocalStack）  helm/farewatch/
+├─ deploy/  docker-compose.yml（api + postgres）  helm/farewatch/（M3）
+├─ infra/terraform/（正式環境，見 docs/deploy-runbook.md）  infra/scripts/（推 image、部署前端）
 ├─ infra/terraform/  （ECR、Lambda + Function URL、EventBridge Scheduler、S3、CloudFront、ACM、SSM、IAM、CloudWatch、Budgets、Cloudflare DNS）
 ├─ .github/  workflows/  pull_request_template.md
 └─ docs/

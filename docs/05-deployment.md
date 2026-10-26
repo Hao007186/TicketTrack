@@ -12,8 +12,11 @@
 （單人專案不另外建 staging；Neon 免費版可以開 branch，給 migration 預演用）
 
 ## 一次性手動設定（寫進部署文件）
-- 購買網域，將 DNS 交給 Cloudflare 管理
-- 在 Resend 驗證網域（DNS 記錄加到 Cloudflare，設為 DNS only），建立 API key 放進 SSM
+完整步驟與指令見 [部署手冊](deploy-runbook.md)。
+- 購買網域（`hao007186.com`），將 DNS 交給 Cloudflare 管理；建立只能編輯這個網域 DNS 的 API token
+- 本機用 **IAM Identity Center** 登入 AWS（`aws sso login`，臨時金鑰），不用 root、不存長期金鑰
+- 建立 Neon 專案（新加坡區），把連線字串、JWT 密鑰、SerpApi key 用 AWS CLI 放進 SSM（不經過 Terraform）
+- SES：網域驗證與 DNS 記錄由 Terraform 建立；手動驗證自己的信箱供沙盒期間測試，並申請解除沙盒
 - 建立 LINE Provider，並在其下建立 Login channel 和 Messaging API channel
 - 建立 Terraform state 用的 S3 bucket（避免雞生蛋問題，不由 Terraform 自己建立）
 
@@ -31,7 +34,7 @@
 ## 成本控管
 - **網域**：約 US$10／年（唯一固定支出）
 - **AWS 免費方案期間**（新帳號最多 6 個月）：費用由抵用金支付，信用卡不會被扣款。**到期或抵用金用完之前必須升級成付費方案，否則帳號會被關閉**
-- **之後**：ECR、S3 每月幾分錢，其他都在永久免費額度內；Email 用 Resend 免費方案
+- **之後**：ECR、S3 每月幾分錢，其他都在永久免費額度內；SES 每 1,000 封約 US$0.10，量少幾乎是 0
 
 | 會產生費用的項目 | 怎麼避免 |
 |---|---|
