@@ -8,11 +8,11 @@ Project_TicketTrack/
 ├─ backend/app/
 │  ├─ core/  db/
 │  ├─ modules/{auth,users,watches,prices,providers,alerts,notifications,email,line,admin}/   # 每個模組：router / schemas / models / service
-│  ├─ handlers/{api.py,checker.py,notifier.py}                                              # Lambda 進入點
+│  ├─ lambda_handlers.py（api_handler、jobs_handler）  jobs/（查價、重寄、維護）             # Lambda 進入點
 │  └─ alembic/  seeds/（示範帳號資料）  tests/  Dockerfile
 ├─ frontend/  src/{pages,components,api,auth,lib,test}  openapi.json   # Dockerfile 在 M3 k8s 時再加
 ├─ deploy/  docker-compose.yml（api + postgres + frontend + MailHog + LocalStack）  helm/farewatch/
-├─ infra/terraform/  （ECR、Lambda + Function URL、EventBridge、SQS、S3、CloudFront、ACM、SSM、IAM、CloudWatch、Budgets、Cloudflare DNS）
+├─ infra/terraform/  （ECR、Lambda + Function URL、EventBridge Scheduler、S3、CloudFront、ACM、SSM、IAM、CloudWatch、Budgets、Cloudflare DNS）
 ├─ .github/  workflows/  pull_request_template.md
 └─ docs/
 ```

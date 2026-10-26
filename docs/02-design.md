@@ -8,7 +8,7 @@
 | 前端 | React + TypeScript + Vite、TanStack Query、Recharts、Tailwind | 主流、型別安全、能純靜態部署到 S3；Recharts 用來畫價格圖 |
 | 後端 | FastAPI + Mangum、SQLAlchemy 2.0 + Alembic、Pydantic、httpx | 非同步呼叫外部 API；Mangum 讓同一份程式在 Lambda 上執行；Alembic 讓本機 DB 和 Neon 結構一致 |
 | DB | PostgreSQL 16：本機用 Docker，正式環境用 **Neon 免費版**（使用 pooler 連線） | 只換連線字串；pooler 避免 Lambda 併發時連線數爆量 |
-| 背景任務 | EventBridge Scheduler + SQS | 取代 Celery/Redis，AWS 代管且免費 |
+| 背景任務 | EventBridge Scheduler 叫醒 jobs Lambda（每天查價、查價後 1 小時與 3 小時重寄、每天維護） | 取代 Celery/Redis，AWS 代管且免費；待寄的信記在 DB（寄件匣），不需要 SQS（見 [#7a 決策紀錄](architecture.md#2026-10-26-7a-決策紀錄)） |
 | 容器 | 同一份 backend Dockerfile（AWS Lambda Python 基底）建出**單一架構** image：arm64 推到 **ECR** 給 Lambda，amd64 只在本機和 CI 建給 kind 用；frontend 用 Nginx image（只給 k8s 用） | Lambda 不接受 multi-arch manifest，build 時要加 `--provenance=false`；見下方〈容器執行方式〉 |
 | k8s | **本機 kind + CI 驗證**，用 Helm chart 部署 | 單人維護正式環境的 k8s 成本高；用來學習和展示 |
 | 網域／DNS | 自有網域，DNS 放 **Cloudflare**（免費） | Route 53 每月 US$0.50；Terraform 有 Cloudflare provider |
@@ -18,8 +18,8 @@
 ## 容器執行方式
 | 環境 | 啟動方式 |
 |---|---|
-| Lambda（arm64） | 基底 image 預設的 Lambda runtime 進入點，經 Mangum 執行；api／checker／notifier 用不同 handler |
-| 本機 docker-compose、k8s（amd64） | 覆寫 ENTRYPOINT 和 CMD 為 `uvicorn app.main:app`（基底 image 的預設進入點是 Lambda runtime）；checker 在 k8s 用 CronJob 執行 |
+| Lambda（arm64） | 基底 image 預設的 Lambda runtime 進入點，api 經 Mangum 執行；api、jobs 兩個 Lambda 用不同 handler（`app.lambda_handlers.api_handler`／`jobs_handler`），機密在冷啟動時從 SSM 讀進環境變數 |
+| 本機 docker-compose、k8s（amd64） | 覆寫 ENTRYPOINT 和 CMD 為 `uvicorn app.main:app`（基底 image 的預設進入點是 Lambda runtime）；排程工作用 `python -m app.jobs.*`，在 k8s 用 CronJob 執行 |
 
 ## 系統架構（正式環境）
 架構圖放在[總覽的〈系統架構圖〉](architecture.md#系統架構圖)，以下是各條路徑的細節。
@@ -32,23 +32,26 @@
                        Lambda Function URL（auth NONE）──► Lambda: api（FastAPI + Mangum，含 LINE webhook 路由）
                                                           └ middleware 檢查 X-Origin-Verify，不符回 403
 
-EventBridge Scheduler（每天）──► Lambda: price-checker
+EventBridge Scheduler（每天）──► Lambda: jobs {"job": "check_prices"}
      1. 取出需要查價的 price_queries（有啟用中的 watch、非示範資料、出發日 > 今天 + 2 天）
      2. 計算今日預算，從最久沒查的 query 開始呼叫 SerpApi
         → 寫入 price_snapshots 並更新 price_baselines
      3. 套用觸發規則 → 需要通知時，在同一個 transaction 寫入 alerts、站內通知（notifications）
-        與待寄紀錄（alert_deliveries，pending），再叫醒 notifier（SQS）
+        與待寄紀錄（alert_deliveries，pending）
      4. 額度用完 → 暫停查價，對受影響的使用者發系統通知（每人每月一次）
-EventBridge Scheduler（每天）──► Lambda: price-checker（維護模式）
+     5. 最後由 notifier 取出 pending 的 alert_deliveries ──► Email（SMTP）+ LINE Messaging API（M2，有綁定才發）
+        （DB 是寄件匣：每封信各自記錄狀態與嘗試次數，失敗 5 次標為 failed）
+EventBridge Scheduler（查價後 1 小時、3 小時）──► Lambda: jobs {"job": "send_notifications"}
+     - 只重寄之前失敗、待重試的信；只排兩次，避免頻繁叫醒 Neon
+EventBridge Scheduler（每天）──► Lambda: jobs {"job": "maintenance"}
      - 出發日已過的 watch 標記為 expired
      - 標記過期後補位（平時名額空出時已經立刻補位）
      - 超過保留期限的 price_snapshots 彙總成每日最低價後刪除（延後，資料量需要時再做）
-SQS ──► Lambda: notifier ──► 取出 pending 的 alert_deliveries ──► Email（SMTP，Resend）+ LINE Messaging API（M2，有綁定才發）
-        （DB 是寄件匣：每封信各自記錄狀態與嘗試次數，失敗 5 次標為 failed；SQS 只負責叫醒）
 
 所有 Lambda ──► Neon PostgreSQL（新加坡區，pooler），Lambda 不放進 VPC，用 TLS 連線
-機密資料 ──► SSM Parameter Store 標準版（含 X-Origin-Verify 密鑰）
-CloudWatch：錯誤、DLQ 堆積、額度、寄送失敗的通知信 → SNS 寄 Email 告警
+機密資料 ──► SSM Parameter Store 標準版（含 X-Origin-Verify 密鑰），Lambda 冷啟動時讀取
+請求大小上限 64 KB（middleware 回 413）
+CloudWatch：錯誤（含 jobs Lambda 執行失敗）、額度、寄送失敗的通知信 → SNS 寄 Email 告警
 ```
 
 ## 核心邏輯設計
@@ -110,14 +113,12 @@ stateDiagram-v2
 ```mermaid
 sequenceDiagram
     participant EB as EventBridge Scheduler
-    participant C as price-checker
+    participant C as jobs Lambda（check_prices）
     participant DB as Neon
     participant SA as SerpApi
-    participant Q as SQS
-    participant N as notifier
-    participant CH as Email（Resend）/ LINE
+    participant CH as Email / LINE
 
-    EB->>C: 每天觸發
+    EB->>C: 每天觸發 {"job": "check_prices"}
     C->>DB: 取出需要查價的 price_queries，計算今日預算
     loop 從最久沒查的 query 開始，直到預算用完
         C->>SA: 查即時價格
@@ -130,12 +131,10 @@ sequenceDiagram
     opt 本月額度已用完
         C->>DB: 暫停查價，產生系統通知
     end
-    C->>Q: 叫醒 notifier
-    Q->>N: 觸發
-    N->>DB: 取出 pending 的 alert_deliveries（SKIP LOCKED）
-    N->>CH: 寄 Email，有綁 LINE 再推播（M2）
-    N->>DB: 標記 sent／失敗次數；失敗 5 次標為 failed
-    Note over C,N: 本機由 check_prices 查完後直接呼叫 notifier
+    C->>DB: 查完價後由 notifier 取出 pending 的 alert_deliveries（SKIP LOCKED）
+    C->>CH: 寄 Email，有綁 LINE 再推播（M2）
+    C->>DB: 標記 sent／失敗次數；失敗 5 次標為 failed
+    Note over EB,C: 查價後 1 小時、3 小時各觸發一次 {"job": "send_notifications"}，只重寄失敗待重試的信
 ```
 
 ### 追蹤的生命週期
