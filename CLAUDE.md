@@ -4,7 +4,11 @@
 產品名稱是 **FareWatch**，repo 資料夾名稱是 `Project_TicketTrack`，兩者指同一個專案。
 
 ## 目前狀態
-- **M1 MVP** 進行中：拆成 7 個子專案，spec／plan 在 `docs/superpowers/`；backend 在 `backend/`，`experiments/m0/` 是 M0 的實驗腳本
+- **M1 MVP** 進行中：拆成 7 個子專案，spec／plan 在 `docs/superpowers/`；backend 在 `backend/`，`frontend/` 是前端，`experiments/m0/` 是 M0 的實驗腳本
+  - #1～#6、目標價參考價、#7a（Lambda handler）已合併
+  - **#7b**（分支 `feat/m1-terraform`）：SES 寄信器、`infra/terraform/`、`infra/scripts/`、`docs/deploy-runbook.md` 已完成並通過部署前審查；**下一步是照 runbook 和使用者一起手動部署**（尚未建立任何雲端資源）
+  - #7c（GitHub Actions 自動部署）尚未開始
+- 正式環境：`https://hao007186.com`，AWS ap-southeast-1，部署步驟見 `docs/deploy-runbook.md`
 - 架構文件是草稿第 3 版：`docs/architecture.md` 是總覽，`docs/01-requirements.md` ~ `docs/06-operations.md` 是 SDLC 6 個階段
 
 ## 何時讀哪份文件
