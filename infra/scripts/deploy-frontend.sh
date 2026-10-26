@@ -14,8 +14,10 @@ distribution="${CLOUDFRONT_DISTRIBUTION_ID:-$(tf_output cloudfront_distribution_
 
 (cd "$root/frontend" && npm ci && npm run build)
 
-# --delete：刪掉 S3 上已經不存在的舊檔（舊版本仍保留在 bucket 的版本紀錄裡）
-aws s3 sync "$root/frontend/dist" "s3://$bucket" --delete
+# 不用 --delete：還開著舊頁面的使用者仍要載入得到舊的 JS／CSS（檔名帶 hash，佔空間很小）
+aws s3 sync "$root/frontend/dist" "s3://$bucket" --exclude index.html
+# index.html 最後上傳並要求瀏覽器每次重新確認，才不會拿舊的 index.html 去找已經換掉的檔案
+aws s3 cp "$root/frontend/dist/index.html" "s3://$bucket/index.html" --cache-control no-cache
 aws cloudfront create-invalidation --distribution-id "$distribution" --paths "/*" >/dev/null
 
 echo "前端已部署到 s3://$bucket，CloudFront 快取已清除"

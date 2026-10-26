@@ -6,6 +6,10 @@
 
 > **機密不要貼進聊天、不要 commit。** 下面需要輸入機密的指令都用 `read -rs`（輸入時畫面不顯示，也不會留在指令紀錄裡）。
 
+> **Git Bash 會把以 `/` 開頭的參數改寫成 Windows 路徑**（`/farewatch/prod/x` 會變成 `C:/Program Files/Git/farewatch/prod/x`）。所以 SSM、CloudWatch log 這類名稱以 `/` 開頭的 AWS 指令，前面都加了 `MSYS_NO_PATHCONV=1`，照抄即可。不要用 `export` 全域設定它，部署腳本需要這個轉換。
+
+> 終端機請用 **VS Code 內建的終端機（選 Git Bash）**；獨立的 Git Bash 視窗在 `aws configure sso` 選帳號時可能出錯。
+
 ## 1. 會用到的帳號與工具
 
 | 項目 | 用途 |
@@ -97,25 +101,26 @@ echo "$STATE_BUCKET"   # 記下來，init 時要用
 ### 2.6 把機密放進 SSM Parameter Store
 Lambda 啟動時會讀 `/farewatch/prod/` 底下的參數，名稱轉大寫後當設定（例如 `jwt_secret` → `JWT_SECRET`）。**名稱只能用底線。**
 ```bash
-# 資料庫（貼上 2.4 的 pooler 連線字串，輸入時不會顯示）
-read -rs DB_URL && aws ssm put-parameter --name /farewatch/prod/database_url \
-  --type SecureString --value "$DB_URL" && unset DB_URL
+# 資料庫（貼上 2.4 的 pooler 連線字串後按 Enter，輸入時不會顯示）
+read -rs DB_URL; MSYS_NO_PATHCONV=1 aws ssm put-parameter --name /farewatch/prod/database_url \
+  --type SecureString --value="$DB_URL"; unset DB_URL
 
-# JWT 密鑰：產生隨機值，不需要知道內容
-aws ssm put-parameter --name /farewatch/prod/jwt_secret --type SecureString \
-  --value "$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+# JWT 密鑰：產生隨機值，不需要知道內容（--value= 的寫法避免值以 - 開頭時被當成參數）
+MSYS_NO_PATHCONV=1 aws ssm put-parameter --name /farewatch/prod/jwt_secret --type SecureString \
+  --value="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
 
 # SerpApi key
-read -rs SERP && aws ssm put-parameter --name /farewatch/prod/serpapi_key \
-  --type SecureString --value "$SERP" && unset SERP
+read -rs SERP; MSYS_NO_PATHCONV=1 aws ssm put-parameter --name /farewatch/prod/serpapi_key \
+  --type SecureString --value="$SERP"; unset SERP
 
 # 正式環境用真的 SerpApi 查價
-aws ssm put-parameter --name /farewatch/prod/price_provider --type String --value serpapi
+MSYS_NO_PATHCONV=1 aws ssm put-parameter --name /farewatch/prod/price_provider --type String --value=serpapi
 ```
-確認（只列名稱，不顯示值）：
+確認（只列名稱，不顯示值），應該看到 4 個名稱：
 ```bash
-aws ssm get-parameters-by-path --path /farewatch/prod/ --query "Parameters[].Name"
+MSYS_NO_PATHCONV=1 aws ssm get-parameters-by-path --path /farewatch/prod/ --query "Parameters[].Name"
 ```
+填錯要重填時，在 `put-parameter` 加上 `--overwrite`。
 `origin_verify_secret` 會由 Terraform 自動建立，不用手動加。
 
 ### 2.7 填 terraform.tfvars
@@ -133,10 +138,20 @@ cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars
    - Use case：說明是機票降價通知網站、只寄給自己註冊的使用者、每天少量、有退信處理
    審核約 1 天。通過前只能寄給第 1 步驗證過的信箱。
 
+### 2.9 確認 Cloudflare 上沒有會衝突的舊記錄
+網域改到 Cloudflare 時，Cloudflare 可能匯入了原註冊商的記錄（例如根網域的停車頁 A／AAAA）。Terraform 要建的記錄如果已經存在，apply 會在最後一步失敗。
+
+到 Cloudflare → `hao007186.com` → **DNS → Records**，確認下面這些名稱**沒有**任何記錄，有的話先刪掉：
+- `hao007186.com`（根網域，A／AAAA／CNAME）
+- `mail`
+- `_dmarc`
+- 名稱含 `_domainkey` 的記錄
+
 ## 3. 第一次部署
 ```bash
 export AWS_PROFILE=farewatch
 aws sso login
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 TAG=$(git rev-parse --short HEAD)
 ```
 
@@ -162,10 +177,12 @@ TAG=$(git rev-parse --short HEAD)
    cd infra/terraform
    terraform plan -var image_tag="$TAG" -out tfplan
    terraform apply tfplan
+   rm tfplan   # plan 檔裡有 Cloudflare token 等明文，用完就刪（也已列入 .gitignore）
    ```
    - 先看 plan 的資源清單沒有奇怪的東西（應該全部是 create）
    - 憑證驗證與 CloudFront 建立要 5～30 分鐘，apply 會停在那裡等，正常
    - 告警信箱會收到 AWS Notification 的訂閱確認信，點 Confirm subscription
+   - 確認訂閱後可能馬上收到一封 `farewatch-jobs-not-running` 告警：jobs 還沒執行過，所以「一整天沒執行」成立。這是預期的，第 4 節手動查價一次後會恢復 OK
    - 確認 SES 網域驗證完成（DNS 生效可能要一段時間）：
      ```bash
      aws sesv2 get-email-identity --email-identity hao007186.com \
@@ -198,8 +215,9 @@ TAG=$(git rev-parse --short HEAD)
 - [ ] 用 2.8 驗證過的信箱註冊帳號、登入；**重新整理頁面後仍維持登入**
 - [ ] 新增一個追蹤，目標價設得很高（例如 100000），然後手動查價一次（花 1 次 SerpApi 額度）：
   ```bash
+  # --cli-read-timeout：查價可能超過 CLI 預設的 60 秒，避免 CLI 逾時後自動重送
   aws lambda invoke --function-name farewatch-jobs --cli-binary-format raw-in-base64-out \
-    --payload '{"job":"check_prices"}' /tmp/out.json && cat /tmp/out.json
+    --cli-read-timeout 900 --payload '{"job":"check_prices"}' /tmp/out.json && cat /tmp/out.json
   ```
   回 `{"job": "check_prices", "exit_code": 0}`；網站右上角鈴鐺有新通知，信箱收到 `noreply@hao007186.com` 寄的信，信中連結是 `https://hao007186.com/...`
 - [ ] 排程用台灣時間：
@@ -209,7 +227,7 @@ TAG=$(git rev-parse --short HEAD)
   ```
   應該是 `cron(0 8 * * ? *)`、`Asia/Taipei`
 - [ ] SNS 訂閱已確認；Billing → Budgets 看得到 `farewatch-monthly`
-- [ ] 有問題時看 log：`aws logs tail /aws/lambda/farewatch-api --since 10m`（jobs 換成 `farewatch-jobs`）
+- [ ] 有問題時看 log：`MSYS_NO_PATHCONV=1 aws logs tail /aws/lambda/farewatch-api --since 10m`（jobs 換成 `farewatch-jobs`）
 
 ## 5. 之後的更新
 - **更新後端**：
@@ -219,9 +237,9 @@ TAG=$(git rev-parse --short HEAD)
   terraform -chdir=infra/terraform apply -var image_tag="$TAG"
   ```
   ECR 的 tag 不能重複；同一個 commit 不能推兩次。
-- **更新前端**：`infra/scripts/deploy-frontend.sh`
+- **更新前端**：`infra/scripts/deploy-frontend.sh`（舊的 JS／CSS 不刪，讓還開著舊頁面的人不會出錯；`index.html` 設成每次重新確認）
 - **有新的 migration**：照第 3 節第 5 步，只跑 `alembic upgrade head`。migration 一律向後相容，先跑 migration 再更新後端
-- **更換機密**：`aws ssm put-parameter --name /farewatch/prod/<名稱> --type SecureString --overwrite --value ...`。Lambda 只在冷啟動時讀 SSM，改完要讓它重新啟動：
+- **更換機密**：`MSYS_NO_PATHCONV=1 aws ssm put-parameter --name /farewatch/prod/<名稱> --type SecureString --overwrite --value=...`。Lambda 只在冷啟動時讀 SSM，改完要讓它重新啟動：
   ```bash
   aws lambda update-function-configuration --function-name farewatch-api --description "rotated $(date +%F)"
   ```
@@ -232,4 +250,4 @@ TAG=$(git rev-parse --short HEAD)
 1. 清空前端 bucket（含所有版本）：S3 主控台選 `farewatch-frontend-<帳號 ID>` → Empty
 2. 刪除 ECR 裡的 image：ECR 主控台 → `farewatch-backend` → 全選 → Delete
 3. `terraform -chdir=infra/terraform destroy -var image_tag=x`
-4. 手動刪除：SSM 的四個參數（`aws ssm delete-parameters --names ...`）、Neon 專案、state bucket、SES 驗證的個人信箱、Identity Center 使用者
+4. 手動刪除：SSM 的四個參數（`MSYS_NO_PATHCONV=1 aws ssm delete-parameters --names ...`）、Neon 專案、state bucket、SES 驗證的個人信箱、Identity Center 使用者

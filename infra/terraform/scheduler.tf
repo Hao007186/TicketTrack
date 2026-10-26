@@ -59,3 +59,10 @@ resource "aws_scheduler_schedule" "jobs" {
     }
   }
 }
+
+# Scheduler 用非同步方式呼叫 Lambda；Lambda 對非同步呼叫的失敗與逾時預設會再重試 2 次，
+# 上面的 retry_policy 只管 Scheduler 自己的投遞，所以這裡也要關掉
+resource "aws_lambda_function_event_invoke_config" "jobs" {
+  function_name          = aws_lambda_function.jobs.function_name
+  maximum_retry_attempts = 0
+}

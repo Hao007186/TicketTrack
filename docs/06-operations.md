@@ -21,7 +21,7 @@
 | SerpApi key 外洩（出現在 log、Git 或被盜用） | 到 SerpApi 網站重新產生 key（舊的立即失效）→ 更新 SSM Parameter Store（正式）或 `backend/.env`（本機）→ 重新部署；搜尋 CloudWatch log 確認是否還有含 key 的紀錄 |
 | SerpApi 停止服務或長期無法使用 | 查價暫停，發系統通知；透過 `PriceProvider` 介面換接其他供應商（例如 Duffel adapter） |
 | LINE 推播失敗或額度用完 | 改由 Email 送達；`alert_deliveries` 出現 `failed` 告警後人工檢查 |
-| Email 寄不出去 | 查 `alert_deliveries` 中 `status = 'failed'` 的 `last_error` → 檢查 SES（`MessageRejected` 多半是沙盒期間收件人沒驗證；網域驗證與 Cloudflare 的 DKIM 記錄是否還在；帳號是否因退信率被暫停）→ 修好後把這些紀錄改回 `pending` 並把 `attempts` 設為 0 → 執行 `python -m app.jobs.send_notifications` 補寄 |
+| Email 寄不出去 | 查 `alert_deliveries` 中 `status = 'failed'` 的 `last_error` → 檢查 SES（`MessageRejected` 多半是沙盒期間收件人沒驗證；網域驗證與 Cloudflare 的 DKIM 記錄是否還在；帳號是否因退信率被暫停）→ 修好後把這些紀錄改回 `pending` 並把 `attempts` 設為 0 → 補寄：正式環境用 `aws lambda invoke --function-name farewatch-jobs --cli-binary-format raw-in-base64-out --payload '{"job":"send_notifications"}' /tmp/out.json`，本機用 `python -m app.jobs.send_notifications` |
 | SES 被暫停寄信 | 檢查退信／投訴原因並向 AWS 回覆；暫時改用支援 SMTP 的服務（例如 Gmail SMTP）：Lambda 環境變數 `EMAIL_SENDER=smtp`，`SMTP_*` 放進 SSM |
 | 正式環境的部署、更新、回滾、換機密 | 見 [部署手冊](deploy-runbook.md) |
 | 註冊被濫用、價格通知寄到被冒用的信箱（退信率／投訴率告警） | 先暫時關閉註冊；再補上註冊頻率限制或 Cloudflare Turnstile，並對 Lambda 設 reserved concurrency |
