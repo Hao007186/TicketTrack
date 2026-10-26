@@ -162,3 +162,99 @@ describe("編輯追蹤", () => {
     expect(await screen.findByText("找不到這個追蹤，可能已被刪除")).toBeInTheDocument();
   });
 });
+
+describe("參考價", () => {
+  const HAS_DATA = /典型價格|還沒有價格資料/;
+
+  function mockReference(body: object, seen?: URL[]) {
+    server.use(
+      http.get("/api/v1/price-reference", ({ request }) => {
+        seen?.push(new URL(request.url));
+        return HttpResponse.json(body);
+      }),
+    );
+  }
+
+  it("有資料時顯示區間與更新日期", async () => {
+    mockCommon();
+    mockReference({ typical_low: 8200, typical_high: 11500, updated_at: "2026-10-20T01:00:00Z" });
+    renderApp("/watches/new");
+    await fillValid();
+    expect(
+      await screen.findByText("同條件的典型價格：NT$ 8,200～NT$ 11,500（10/20 更新）"),
+    ).toBeInTheDocument();
+  });
+
+  it("查詢參數帶上表單條件", async () => {
+    mockCommon();
+    const seen: URL[] = [];
+    mockReference({ typical_low: null, typical_high: null, updated_at: null }, seen);
+    renderApp("/watches/new");
+    await fillValid();
+    await userEvent.click(screen.getByLabelText("中華航空"));
+    await waitFor(() =>
+      expect(seen.some((u) => u.searchParams.getAll("airlines").includes("CI"))).toBe(true),
+    );
+    const last = seen.at(-1)!;
+    expect(last.searchParams.get("destination")).toBe("NRT");
+    expect(last.searchParams.get("depart_date")).toBe(DEPART);
+    expect(last.searchParams.get("return_date")).toBe(RETURN);
+  });
+
+  it("新增時沒資料顯示建立後的提示", async () => {
+    mockCommon();
+    renderApp("/watches/new");
+    await fillValid();
+    expect(
+      await screen.findByText(
+        "這個行程還沒有價格資料，建立後第一次查價就會顯示，之後可以再調整目標價",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("編輯時沒資料顯示儲存後的提示", async () => {
+    mockCommon();
+    const watch = makeWatch();
+    mockGetWatch(watch);
+    renderApp(`/watches/${watch.public_id}/edit`);
+    expect(
+      await screen.findByText(
+        "這個行程還沒有價格資料，儲存後第一次查價就會顯示，之後可以再調整目標價",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("條件不完整時不發請求", async () => {
+    mockCommon();
+    let calls = 0;
+    server.use(
+      http.get("/api/v1/price-reference", () => {
+        calls += 1;
+        return HttpResponse.json({ typical_low: 1, typical_high: 2, updated_at: null });
+      }),
+    );
+    renderApp("/watches/new");
+    await screen.findByRole("option", { name: "東京成田 NRT" });
+    await userEvent.selectOptions(screen.getByLabelText("目的地"), "NRT");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(calls).toBe(0);
+    expect(screen.queryByText(HAS_DATA)).not.toBeInTheDocument();
+  });
+
+  it("請求失敗時不顯示", async () => {
+    mockCommon();
+    let calls = 0;
+    server.use(
+      http.get("/api/v1/price-reference", () => {
+        calls += 1;
+        return HttpResponse.json({ detail: "壞掉了" }, { status: 500 });
+      }),
+    );
+    renderApp("/watches/new");
+    await fillValid();
+    await waitFor(() => expect(calls).toBeGreaterThan(0));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText(HAS_DATA)).not.toBeInTheDocument();
+    expect(screen.queryByText(/壞掉了/)).not.toBeInTheDocument();
+  });
+});

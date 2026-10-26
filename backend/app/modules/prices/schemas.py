@@ -22,3 +22,11 @@ class BaselineOut(BaseModel):
     record_low: int | None
     # false 時前端顯示「歷史資料累積中」
     history_ready: bool
+
+
+class PriceReferenceOut(BaseModel):
+    """新增／編輯表單的參考價；只回 Google 的典型區間，不透露是誰在追蹤。"""
+
+    typical_low: int | None
+    typical_high: int | None
+    updated_at: datetime | None

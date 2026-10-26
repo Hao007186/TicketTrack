@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { addDays, formatDate, formatDateTime, formatPrice, todayInTaipei } from "./format";
+import {
+  addDays,
+  formatDate,
+  formatDateTime,
+  formatMonthDay,
+  formatPrice,
+  todayInTaipei,
+} from "./format";
 
 describe("format", () => {
   it("金額加上 NT$ 和千分位", () => {
@@ -10,6 +17,11 @@ describe("format", () => {
 
   it("時間顯示成台灣時間", () => {
     expect(formatDateTime("2026-10-25T00:00:00Z")).toBe("10/25 08:00");
+  });
+
+  it("月日顯示成台灣時間、不補零", () => {
+    expect(formatMonthDay("2026-10-19T16:30:00Z")).toBe("10/20");
+    expect(formatMonthDay("2026-03-05T01:00:00Z")).toBe("3/5");
   });
 
   it("日期不做時區換算", () => {

@@ -108,6 +108,34 @@ export function toCreateBody(v: WatchFormValues): WatchCreate {
   };
 }
 
+export type ReferenceConditions = {
+  origin: string;
+  destination: string;
+  depart_date: string;
+  return_date?: string;
+  cabin: Cabin;
+  adults: number;
+  airlines: string[];
+};
+
+/** 查參考價用的條件；條件不完整（後端會回 422 或一定查不到）時回 null。目標價不需要填。 */
+export function referenceConditions(v: WatchFormValues): ReferenceConditions | null {
+  if (!v.destination || v.destination === v.origin || !v.departDate) return null;
+  const cond: ReferenceConditions = {
+    origin: v.origin,
+    destination: v.destination,
+    depart_date: v.departDate,
+    cabin: v.cabin,
+    adults: v.adults,
+    airlines: v.airlines,
+  };
+  if (v.tripType === "round_trip") {
+    if (!v.returnDate || v.returnDate < v.departDate) return null;
+    cond.return_date = v.returnDate;
+  }
+  return cond;
+}
+
 function sameSet(a: string[], b: string[]): boolean {
   return a.length === b.length && [...a].sort().join() === [...b].sort().join();
 }

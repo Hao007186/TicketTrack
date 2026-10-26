@@ -306,7 +306,7 @@ erDiagram
 ## API 草案（/api/v1，FastAPI 自動產生 OpenAPI 文件）
 - Auth：`POST /auth/register|login|refresh|logout|demo`、`GET /me`
 - LINE：`GET /me/line/link`、`GET /auth/line/callback`、`GET/DELETE /me/line`、`POST /line/webhook`
-- Watches：`GET/POST /watches`（`?status=` 篩選）、`GET/PATCH/DELETE /watches/{id}`（PATCH 也用來暫停／恢復）、`GET /watches/{id}/prices?range=`、`GET /watches/{id}/baseline`
+- Watches：`GET/POST /watches`（`?status=` 篩選）、`GET/PATCH/DELETE /watches/{id}`（PATCH 也用來暫停／恢復）、`GET /watches/{id}/prices?range=`、`GET /watches/{id}/baseline`、`GET /price-reference`（新增／編輯表單的參考價：完全相同條件的典型價格區間，不花額度）
 - 通知：`GET /notifications`（`?watch_id=` 篩選某個追蹤的價格通知）、`PATCH /notifications/{id}/read`、`POST /notifications/read-all`、`GET/PATCH /me/notification-settings`
 - 參考資料：`GET /airports`、`GET /airlines`；Admin：`GET /admin/usage`
 - 健康檢查：`GET /health`
@@ -315,6 +315,8 @@ erDiagram
 首頁（含「以示範帳號瀏覽」按鈕）→ 註冊／登入 → 我的追蹤列表（進行中／歷史紀錄分頁）→ 新增／編輯追蹤 → 追蹤詳情 → 通知中心（鈴鐺 + 未讀數）→ 設定（個人資料、LINE 綁定與 QR code、通知開關）
 
 **示範帳號：** 頂部固定顯示「你正在使用示範帳號，資料為唯讀」；寫入按鈕照樣顯示但不能按，滑過去提示「示範帳號無法修改」，讓訪客看得到網站有哪些功能。版面以電腦為主，手機寬度能用即可。細節見 [#6 前端設計](superpowers/specs/2026-10-25-m1-frontend-design.md)。
+
+**目標價參考價：** 新增／編輯表單填好查價條件後，若資料庫已有完全相同條件的典型價格區間就顯示在目標價下方，沒有就提示第一次查價後會顯示；不花查價額度。細節見 [目標價參考價設計](superpowers/specs/2026-10-26-m1-price-reference-design.md)。
 
 **追蹤詳情的價格圖：** SerpApi 價格畫成主線，加上目標價線和典型價格區間色帶；下方列出最近通知和訂票連結。
 

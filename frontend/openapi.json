@@ -329,6 +329,52 @@
         "title": "PricePoint",
         "type": "object"
       },
+      "PriceReferenceOut": {
+        "description": "新增／編輯表單的參考價；只回 Google 的典型區間，不透露是誰在追蹤。",
+        "properties": {
+          "typical_high": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typical High"
+          },
+          "typical_low": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typical Low"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "typical_low",
+          "typical_high",
+          "updated_at"
+        ],
+        "title": "PriceReferenceOut",
+        "type": "object"
+      },
       "RegisterRequest": {
         "properties": {
           "display_name": {
@@ -1296,6 +1342,134 @@
         "summary": "Mark Read",
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/api/v1/price-reference": {
+      "get": {
+        "operationId": "get_price_reference_api_v1_price_reference_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "origin",
+            "required": true,
+            "schema": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Origin",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "destination",
+            "required": true,
+            "schema": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Destination",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "depart_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Depart Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "return_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Return Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cabin",
+            "required": false,
+            "schema": {
+              "default": "economy",
+              "enum": [
+                "economy",
+                "premium_economy",
+                "business",
+                "first"
+              ],
+              "title": "Cabin",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "adults",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "maximum": 9,
+              "minimum": 1,
+              "title": "Adults",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "airlines",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Airlines",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceReferenceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Price Reference",
+        "tags": [
+          "prices"
         ]
       }
     },

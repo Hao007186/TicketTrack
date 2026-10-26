@@ -4,6 +4,7 @@ import { makeWatch } from "../test/data";
 import {
   emptyForm,
   fromWatch,
+  referenceConditions,
   resetsAlertState,
   toCreateBody,
   toUpdateBody,
@@ -133,5 +134,49 @@ describe("resetsAlertState", () => {
     expect(resetsAlertState({})).toBe(false);
     expect(resetsAlertState({ target_price: 1 })).toBe(true);
     expect(resetsAlertState({ return_date: null })).toBe(true);
+  });
+});
+
+describe("referenceConditions", () => {
+  it("來回條件完整時回傳條件", () => {
+    expect(referenceConditions(valid())).toEqual({
+      origin: "TPE",
+      destination: "NRT",
+      depart_date: "2026-12-19",
+      return_date: "2026-12-24",
+      cabin: "economy",
+      adults: 1,
+      airlines: [],
+    });
+  });
+
+  it("單程不帶回程日，即使欄位還留著舊值", () => {
+    const cond = referenceConditions(valid({ tripType: "one_way" }));
+    expect(cond).not.toBeNull();
+    expect(cond).not.toHaveProperty("return_date");
+  });
+
+  it("缺目的地回 null", () => {
+    expect(referenceConditions(valid({ destination: "" }))).toBeNull();
+  });
+
+  it("出發地等於目的地回 null", () => {
+    expect(referenceConditions(valid({ destination: "TPE" }))).toBeNull();
+  });
+
+  it("缺出發日回 null", () => {
+    expect(referenceConditions(valid({ departDate: "" }))).toBeNull();
+  });
+
+  it("來回缺回程日回 null", () => {
+    expect(referenceConditions(valid({ returnDate: "" }))).toBeNull();
+  });
+
+  it("回程早於出發回 null", () => {
+    expect(referenceConditions(valid({ returnDate: "2026-12-18" }))).toBeNull();
+  });
+
+  it("目標價沒填也照樣回傳條件", () => {
+    expect(referenceConditions(valid({ targetPrice: "" }))).not.toBeNull();
   });
 });

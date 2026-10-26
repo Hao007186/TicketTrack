@@ -6,6 +6,7 @@ import {
   useAirlines,
   useAirports,
   useCreateWatch,
+  usePriceReference,
   useUpdateWatch,
   useWatch,
   type Airport,
@@ -16,11 +17,18 @@ import { QueryError } from "../components/QueryError";
 import { buttonPrimary, buttonSecondary, card, errorBox, input, label } from "../components/ui";
 import { useToast } from "../components/useToast";
 import { WriteButton } from "../components/WriteButton";
-import { CABIN_LABELS, todayInTaipei, type Cabin } from "../lib/format";
+import {
+  CABIN_LABELS,
+  formatMonthDay,
+  formatPrice,
+  todayInTaipei,
+  type Cabin,
+} from "../lib/format";
 import {
   dateRange,
   emptyForm,
   fromWatch,
+  referenceConditions,
   resetsAlertState,
   toCreateBody,
   toUpdateBody,
@@ -86,6 +94,19 @@ function Field({
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
     </div>
   );
+}
+
+/** 目標價下方的參考價；條件不完整、載入中或查詢失敗時不顯示 */
+function PriceReferenceHint({ values, editing }: { values: WatchFormValues; editing: boolean }) {
+  const { data } = usePriceReference(referenceConditions(values));
+  if (!data) return null;
+  const { typical_low: low, typical_high: high, updated_at } = data;
+  const text =
+    low !== null && high !== null
+      ? `同條件的典型價格：${formatPrice(low)}～${formatPrice(high)}` +
+        (updated_at ? `（${formatMonthDay(updated_at)} 更新）` : "")
+      : `這個行程還沒有價格資料，${editing ? "儲存" : "建立"}後第一次查價就會顯示，之後可以再調整目標價`;
+  return <p className="mt-1 text-xs text-slate-500">{text}</p>;
 }
 
 function WatchForm({ original }: { original?: Watch }) {
@@ -270,6 +291,7 @@ function WatchForm({ original }: { original?: Watch }) {
             value={values.targetPrice}
             onChange={(e) => set("targetPrice", e.target.value)}
           />
+          <PriceReferenceHint values={values} editing={original !== undefined} />
         </Field>
       </div>
 
