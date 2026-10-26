@@ -27,6 +27,12 @@ export function formatDateTime(iso: string): string {
   return `${parts.month}/${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
+/** 時間點的台灣日期，M/D 不補零 */
+export function formatMonthDay(iso: string): string {
+  const [, month, day] = todayInTaipei(new Date(iso)).split("-");
+  return `${Number(month)}/${Number(day)}`;
+}
+
 export function formatDate(isoDate: string): string {
   return isoDate.replaceAll("-", "/");
 }

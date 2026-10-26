@@ -59,6 +59,9 @@ export function mockCommon({ unread = 0 }: { unread?: number } = {}) {
     http.get("/api/v1/airports", () => HttpResponse.json(airports)),
     http.get("/api/v1/airlines", () => HttpResponse.json(airlines)),
     http.get("/api/v1/notifications", () => HttpResponse.json({ items: [], unread_count: unread })),
+    http.get("/api/v1/price-reference", () =>
+      HttpResponse.json({ typical_low: null, typical_high: null, updated_at: null }),
+    ),
   );
 }
 
