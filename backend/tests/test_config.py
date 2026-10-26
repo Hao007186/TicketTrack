@@ -144,3 +144,21 @@ def test_prod_requires_origin_verify_secret(
     with pytest.raises(ValidationError) as exc:
         Settings(_env_file=None)
     assert "ORIGIN_VERIFY_SECRET" in str(exc.value)
+
+
+def test_ses_requires_email_from(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", URL)
+    monkeypatch.setenv("EMAIL_SENDER", "ses")
+    monkeypatch.delenv("EMAIL_FROM", raising=False)
+    with pytest.raises(ValidationError) as exc:
+        Settings(_env_file=None)
+    assert "EMAIL_FROM" in str(exc.value)
+
+
+def test_ses_needs_no_smtp_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", URL)
+    monkeypatch.setenv("EMAIL_SENDER", "ses")
+    monkeypatch.setenv("EMAIL_FROM", "FareWatch <noreply@hao007186.com>")
+    for name in ("SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD"):
+        monkeypatch.delenv(name, raising=False)
+    assert Settings(_env_file=None).email_sender == "ses"
