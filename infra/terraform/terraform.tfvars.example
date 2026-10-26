@@ -1,0 +1,5 @@
+# 複製成 terraform.tfvars 再填值；terraform.tfvars 不會進 git
+image_tag            = "部署的 git SHA，例如 abc1234"
+alert_email          = "告警要寄到的信箱"
+cloudflare_api_token = "Cloudflare API token（只限 hao007186.com 的 DNS 編輯）"
+cloudflare_zone_id   = "Cloudflare 網域總覽頁右下角的 Zone ID"

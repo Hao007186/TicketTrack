@@ -6,3 +6,7 @@ experiments/m0/output/
 .pytest_cache/
 .ruff_cache/
 .claude/settings.local.json
+infra/terraform/.terraform/
+*.tfstate
+*.tfstate.*
+infra/terraform/terraform.tfvars
