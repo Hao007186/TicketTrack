@@ -119,6 +119,7 @@ def test_prod_accepts_real_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", URL)
     monkeypatch.setenv("ENV", "prod")
     monkeypatch.setenv("APP_BASE_URL", "https://farewatch.example")
+    monkeypatch.setenv("ORIGIN_VERIFY_SECRET", "s3cret")
     assert Settings(_env_file=None).env == "prod"
 
 
@@ -126,3 +127,20 @@ def test_origin_verify_secret_default_none(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("DATABASE_URL", URL)
     monkeypatch.delenv("ORIGIN_VERIFY_SECRET", raising=False)
     assert Settings(_env_file=None).origin_verify_secret is None
+
+
+@pytest.mark.parametrize("secret", [None, ""])
+def test_prod_requires_origin_verify_secret(
+    monkeypatch: pytest.MonkeyPatch, secret: str | None
+) -> None:
+    # 漏設或設成空字串時，來源檢查會悄悄關閉，任何人都能繞過 CloudFront
+    monkeypatch.setenv("DATABASE_URL", URL)
+    monkeypatch.setenv("ENV", "prod")
+    monkeypatch.setenv("APP_BASE_URL", "https://farewatch.example")
+    if secret is None:
+        monkeypatch.delenv("ORIGIN_VERIFY_SECRET", raising=False)
+    else:
+        monkeypatch.setenv("ORIGIN_VERIFY_SECRET", secret)
+    with pytest.raises(ValidationError) as exc:
+        Settings(_env_file=None)
+    assert "ORIGIN_VERIFY_SECRET" in str(exc.value)

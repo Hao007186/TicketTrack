@@ -43,6 +43,7 @@ def fresh_engine_cache() -> Iterator[None]:
 def test_prod_engine_uses_null_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENV", "prod")
     monkeypatch.setenv("APP_BASE_URL", "https://farewatch.example")
+    monkeypatch.setenv("ORIGIN_VERIFY_SECRET", "s3cret")
     assert isinstance(get_engine().pool, NullPool)
 
 

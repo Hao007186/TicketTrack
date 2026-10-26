@@ -60,6 +60,14 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _prod_needs_origin_secret(self) -> Self:
+        # 漏設時來源檢查會悄悄關閉，任何人都能直接打公開的 Function URL
+        secret = self.origin_verify_secret
+        if self.env == "prod" and (secret is None or not secret.get_secret_value()):
+            raise ValueError("ENV=prod 時必須設定 ORIGIN_VERIFY_SECRET")
+        return self
+
+    @model_validator(mode="after")
     def _smtp_needs_fields(self) -> Self:
         if self.email_sender != "smtp":
             return self
