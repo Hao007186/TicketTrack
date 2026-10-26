@@ -1,4 +1,4 @@
-"""寄信器：notifier 只認 EmailSender 介面，背後是 console 還是 SMTP 由設定決定。"""
+"""寄信器：notifier 只認 EmailSender 介面，背後是 console、SMTP 還是 SES 由設定決定。"""
 
 import asyncio
 import email.message
@@ -6,11 +6,15 @@ import logging
 import smtplib
 import ssl
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
+from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import SecretStr
 
 from app.core.config import Settings
+
+if TYPE_CHECKING:
+    from mypy_boto3_sesv2 import SESV2Client
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +48,7 @@ class ConsoleEmailSender:
 
 
 class SmtpEmailSender:
-    """STARTTLS + 帳密登入；Resend、Gmail、SES 都是同一份程式，只差設定。"""
+    """STARTTLS + 帳密登入；支援 SMTP 的寄信服務（Gmail、Resend 等）都用這份，只差設定。"""
 
     def __init__(
         self,
@@ -86,9 +90,48 @@ class SmtpEmailSender:
         return text.replace(secret, "***") if secret else text
 
 
+class SesEmailSender:
+    """呼叫 SES API 寄信；權限來自 Lambda 的 IAM role，不需要任何密碼。"""
+
+    def __init__(self, from_addr: str, client: SESV2Client | None = None) -> None:
+        self._from = from_addr
+        # 第一次寄信時才建立，本機與測試不會連 AWS
+        self._client = client
+
+    async def send(self, message: EmailMessage) -> None:
+        # boto3 是同步的，丟到執行緒跑才不會卡住 event loop
+        await asyncio.to_thread(self._send, message)
+
+    def _send(self, message: EmailMessage) -> None:
+        if self._client is None:
+            import boto3
+
+            self._client = boto3.client("sesv2")
+        try:
+            self._client.send_email(
+                FromEmailAddress=self._from,
+                Destination={"ToAddresses": [message.to]},
+                Content={
+                    "Simple": {
+                        "Subject": {"Data": message.subject, "Charset": "UTF-8"},
+                        "Body": {"Text": {"Data": message.text, "Charset": "UTF-8"}},
+                    }
+                },
+            )
+        except ClientError as e:
+            error = e.response.get("Error", {})
+            raise EmailError(f"{error.get('Code')}: {error.get('Message')}") from None
+        except BotoCoreError as e:
+            raise EmailError(f"{type(e).__name__}: {e}") from None
+
+
 def get_email_sender(settings: Settings) -> EmailSender:
     if settings.email_sender == "console":
         return ConsoleEmailSender()
+    if settings.email_sender == "ses":
+        # 設定驗證已保證 ses 時有 EMAIL_FROM
+        assert settings.email_from
+        return SesEmailSender(settings.email_from)
     # 設定驗證已保證 smtp 時這些欄位都有值
     assert settings.smtp_host and settings.smtp_username and settings.email_from
     assert settings.smtp_password is not None

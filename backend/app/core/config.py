@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     price_provider: Literal["mock", "serpapi"] = "mock"
     serpapi_key: SecretStr | None = None
 
-    # 本機預設只把信印在 log；smtp 可接 Resend、Gmail 或 SES
-    email_sender: Literal["console", "smtp"] = "console"
+    # 本機預設只把信印在 log；smtp 給其他寄信服務；ses 用 Lambda 的 IAM 權限呼叫 SES API
+    email_sender: Literal["console", "smtp", "ses"] = "console"
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
@@ -65,6 +65,12 @@ class Settings(BaseSettings):
         secret = self.origin_verify_secret
         if self.env == "prod" and (secret is None or not secret.get_secret_value()):
             raise ValueError("ENV=prod 時必須設定 ORIGIN_VERIFY_SECRET")
+        return self
+
+    @model_validator(mode="after")
+    def _ses_needs_from(self) -> Self:
+        if self.email_sender == "ses" and not self.email_from:
+            raise ValueError("EMAIL_SENDER=ses 時必須設定 EMAIL_FROM")
         return self
 
     @model_validator(mode="after")

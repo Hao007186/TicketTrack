@@ -41,7 +41,7 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
-    "boto3-stubs[ssm]>=1.43.118",
+    "boto3-stubs[sesv2,ssm]>=1.43.118",
     "mypy>=2.4.0",
     "pre-commit>=4.7.0",
     "pytest>=9.1.1",

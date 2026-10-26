@@ -1,9 +1,10 @@
 import logging
 import smtplib
 from email.message import EmailMessage as MimeMessage
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from botocore.exceptions import ClientError, EndpointConnectionError
 from pydantic import SecretStr
 
 from app.core.config import Settings
@@ -11,6 +12,7 @@ from app.modules.notifications.email import (
     ConsoleEmailSender,
     EmailError,
     EmailMessage,
+    SesEmailSender,
     SmtpEmailSender,
     get_email_sender,
 )
@@ -118,3 +120,57 @@ async def test_smtp_error_masks_password(fake_smtp: type[FakeSMTP]) -> None:
     with pytest.raises(EmailError) as exc:
         await _sender().send(MESSAGE)
     assert PASSWORD not in str(exc.value)
+
+
+SES_FROM = "FareWatch <noreply@hao007186.com>"
+
+
+class FakeSES:
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error
+        self.calls: list[dict[str, Any]] = []
+
+    def send_email(self, **kwargs: Any) -> dict[str, str]:
+        self.calls.append(kwargs)
+        if self.error is not None:
+            raise self.error
+        return {"MessageId": "m-1"}
+
+
+def _ses(fake: FakeSES) -> SesEmailSender:
+    return SesEmailSender(SES_FROM, client=cast(Any, fake))
+
+
+async def test_ses_sender_sends() -> None:
+    fake = FakeSES()
+    await _ses(fake).send(MESSAGE)
+    kwargs = fake.calls[0]
+    assert kwargs["FromEmailAddress"] == SES_FROM
+    assert kwargs["Destination"] == {"ToAddresses": [MESSAGE.to]}
+    simple = kwargs["Content"]["Simple"]
+    assert simple["Subject"] == {"Data": MESSAGE.subject, "Charset": "UTF-8"}
+    assert simple["Body"] == {"Text": {"Data": MESSAGE.text, "Charset": "UTF-8"}}
+
+
+async def test_ses_rejected_becomes_email_error() -> None:
+    # 沙盒期間寄給未驗證的地址會被拒；要交給 notifier 重試，而不是讓整個工作失敗
+    error = ClientError(
+        {"Error": {"Code": "MessageRejected", "Message": "Email address is not verified."}},
+        "SendEmail",
+    )
+    with pytest.raises(EmailError) as exc:
+        await _ses(FakeSES(error)).send(MESSAGE)
+    assert "MessageRejected" in str(exc.value)
+    assert exc.value.__cause__ is None
+    assert exc.value.__suppress_context__ is True
+
+
+async def test_ses_botocore_error_becomes_email_error() -> None:
+    error = EndpointConnectionError(endpoint_url="https://email.ap-southeast-1.amazonaws.com")
+    with pytest.raises(EmailError):
+        await _ses(FakeSES(error)).send(MESSAGE)
+
+
+async def test_get_email_sender_ses() -> None:
+    settings = Settings(_env_file=None, email_sender="ses", email_from=SES_FROM)
+    assert isinstance(get_email_sender(settings), SesEmailSender)

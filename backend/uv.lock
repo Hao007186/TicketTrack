@@ -197,6 +197,9 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+sesv2 = [
+    { name = "mypy-boto3-sesv2" },
+]
 ssm = [
     { name = "mypy-boto3-ssm" },
 ]
@@ -371,7 +374,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "boto3-stubs", extra = ["ssm"] },
+    { name = "boto3-stubs", extra = ["sesv2", "ssm"] },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -397,7 +400,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "boto3-stubs", extras = ["ssm"], specifier = ">=1.43.118" },
+    { name = "boto3-stubs", extras = ["sesv2", "ssm"], specifier = ">=1.43.118" },
     { name = "mypy", specifier = ">=2.4.0" },
     { name = "pre-commit", specifier = ">=4.7.0" },
     { name = "pytest", specifier = ">=9.1.1" },
@@ -763,6 +766,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/df/c0/1a5dc601c22041a7bbfe1ff71cf097fbbd4fb49930867c6789baf5102106/mypy-2.4.0-cp315-cp315t-win_amd64.whl", hash = "sha256:172e30b8fea631fe310f0c665477f52d9ea40bb4e99e0c81dc30118563b13710", size = 12350955, upload-time = "2026-10-01T20:40:01.52Z" },
     { url = "https://files.pythonhosted.org/packages/1c/bc/697e9e26fc2a86c094ad67ee1e419971b7f01ded66ee66231b09e9f3e12e/mypy-2.4.0-cp315-cp315t-win_arm64.whl", hash = "sha256:5786ef987b3767e51aaa53f20aec104c0252b42ecda7aef8e8b4cbae279b05c5", size = 11842738, upload-time = "2026-10-01T20:40:30.026Z" },
     { url = "https://files.pythonhosted.org/packages/81/12/46ae8670c98a3cd0286ca5645c2f918f8f6be65edfed81b916010619f668/mypy-2.4.0-py3-none-any.whl", hash = "sha256:d01c5d26a352acc6d5cf3128225477e1e8465e8d3029d4c345807fbf7f3cf093", size = 2800734, upload-time = "2026-10-01T20:39:26.837Z" },
+]
+
+[[package]]
+name = "mypy-boto3-sesv2"
+version = "1.43.110"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1a/ea/7c18bbb390a809c9d83283813d7562c4117cd13d39a3f6bcb3181b8ec67c/mypy_boto3_sesv2-1.43.110.tar.gz", hash = "sha256:72ac73bab29fc1bad5c185fdf505db6d5a5fd64b9d5e13f53e41457f43d840ff", size = 49850, upload-time = "2026-10-08T22:26:42.97Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d7/2b/06d3482009a7f51501910609d0a1c170dd4ad44e5e14d17a43aeffd833c4/mypy_boto3_sesv2-1.43.110-py3-none-any.whl", hash = "sha256:26ad1faf751aa0ef7c7e3ef65d171d9221b4b766f03d35460b7ffb4ddf780445", size = 55700, upload-time = "2026-10-08T22:26:40.447Z" },
 ]
 
 [[package]]
