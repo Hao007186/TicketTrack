@@ -18,15 +18,16 @@ def format_summary(summary: SendSummary) -> str:
     )
 
 
-async def _main() -> None:
+async def run_send_notifications() -> SendSummary:
     settings = get_settings()
     logging.basicConfig(level=settings.log_level)
     async with get_sessionmaker()() as session:
         summary = await send_pending(session, get_email_sender(settings), settings.app_base_url)
     print(format_summary(summary))
+    return summary
 
 
 if __name__ == "__main__":
     # psycopg async 不支援 Windows 預設的 ProactorEventLoop
     loop_factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
-    asyncio.run(_main(), loop_factory=loop_factory)
+    asyncio.run(run_send_notifications(), loop_factory=loop_factory)

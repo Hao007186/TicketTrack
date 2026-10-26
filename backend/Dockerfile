@@ -21,4 +21,5 @@ COPY alembic.ini ./
 COPY migrations ./migrations
 COPY app ./app
 
-# Lambda handler 在 M1 子專案 #7（部署）加入
+# 預設是 api 的 handler；jobs Lambda 用 image_config.command 改成 app.lambda_handlers.jobs_handler
+CMD ["app.lambda_handlers.api_handler"]
