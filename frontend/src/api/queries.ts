@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { ReferenceConditions } from "../lib/watchForm";
 import { api, unwrap } from "./client";
 import type { components } from "./schema";
 
@@ -12,6 +13,7 @@ export type WatchUpdate = components["schemas"]["WatchUpdate"];
 export type PricePoint = components["schemas"]["PricePoint"];
 export type PriceRange = "30d" | "90d" | "all";
 export type Notification = components["schemas"]["NotificationOut"];
+export type PriceReference = components["schemas"]["PriceReferenceOut"];
 
 // 寫入成功後用這些 key 讓相關資料重新抓取；前綴相同的 key 會一起失效
 export const keys = {
@@ -201,6 +203,16 @@ export function useBaseline(id: string) {
           params: { path: { public_id: id } },
         }),
       ),
+  });
+}
+
+export function usePriceReference(cond: ReferenceConditions | null) {
+  return useQuery({
+    queryKey: ["price-reference", cond],
+    queryFn: async () =>
+      unwrap(await api.GET("/api/v1/price-reference", { params: { query: cond! } })),
+    enabled: cond !== null,
+    staleTime: 5 * 60_000,
   });
 }
 

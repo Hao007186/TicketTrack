@@ -226,6 +226,23 @@ export interface paths {
     patch: operations["mark_read_api_v1_notifications__public_id__read_patch"];
     trace?: never;
   };
+  "/api/v1/price-reference": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Price Reference */
+    get: operations["get_price_reference_api_v1_price_reference_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/watches": {
     parameters: {
       query?: never;
@@ -411,6 +428,18 @@ export interface components {
       observed_at: string;
       /** Price */
       price: number;
+    };
+    /**
+     * PriceReferenceOut
+     * @description 新增／編輯表單的參考價；只回 Google 的典型區間，不透露是誰在追蹤。
+     */
+    PriceReferenceOut: {
+      /** Typical High */
+      typical_high: number | null;
+      /** Typical Low */
+      typical_low: number | null;
+      /** Updated At */
+      updated_at: string | null;
     };
     /** RegisterRequest */
     RegisterRequest: {
@@ -927,6 +956,43 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["NotificationOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_price_reference_api_v1_price_reference_get: {
+    parameters: {
+      query: {
+        origin: string;
+        destination: string;
+        depart_date: string;
+        return_date?: string | null;
+        cabin?: "economy" | "premium_economy" | "business" | "first";
+        adults?: number;
+        airlines?: string[];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PriceReferenceOut"];
         };
       };
       /** @description Validation Error */
