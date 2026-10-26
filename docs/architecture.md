@@ -16,6 +16,7 @@
 - 2026-10-23 確定追蹤的資料模型與補位規則，見文末〈2026-10-23 #3 決策紀錄〉
 - 2026-10-23 確定查價、額度預算與 API key 保護，並用真實回應確認指定航空公司的情況，見文末〈2026-10-23 #4 決策紀錄〉
 - 2026-10-24 確定寄信服務（Resend，走 SMTP）與通知的寄件匣流程，見文末〈2026-10-24 #5 決策紀錄〉
+- 2026-10-26 拿掉 SQS，Lambda 改成 api 與 jobs 兩個，見文末〈2026-10-26 #7a 決策紀錄〉
 
 ## 文件索引
 | 階段 | 文件 | 內容 |
@@ -39,21 +40,16 @@ flowchart TB
     cdn -->|"/api 和 /line/webhook，加上 X-Origin-Verify 標頭"| furl["Lambda Function URL（auth NONE）"]
     furl --> api["Lambda: api（FastAPI + Mangum）"]
 
-    sched["EventBridge Scheduler（每天：查價、維護）"] --> checker["Lambda: price-checker"]
-    checker --> serp["SerpApi Google Flights"]
-    checker -->|叫醒| sqs["SQS"]
-    sqs --> notifier["Lambda: notifier"]
-    sqs -.->|重試失敗| dlq["DLQ"]
-    notifier --> email["Email（SMTP，Resend）"]
-    notifier --> lineapi["LINE Messaging API"]
+    sched["EventBridge Scheduler（每天查價、查價後重寄兩次、每天維護）"] --> jobs["Lambda: jobs（查價、重寄、維護）"]
+    jobs --> serp["SerpApi Google Flights"]
+    jobs --> email["Email（SMTP）"]
+    jobs --> lineapi["LINE Messaging API（M2）"]
 
     api --> db[("Neon PostgreSQL（新加坡區，pooler）")]
-    checker --> db
-    notifier --> db
+    jobs --> db
 
     ssm["SSM Parameter Store（機密資料）"] -.-> api
-    ssm -.-> checker
-    ssm -.-> notifier
+    ssm -.-> jobs
     cw["CloudWatch 告警"] --> sns["SNS 寄 Email"]
 ```
 
@@ -182,6 +178,15 @@ flowchart TB
 | 3 | 站內通知由誰寫入（修正 02-design「notifier 寫入 notifications」） | checker 在同一個 transaction 寫入；notifier 只負責外部管道 |
 | 4 | 系統通知的對象與管道 | 只發站內通知、不寄 Email；額度用完時發給受影響（今天原本要查價）的使用者，每人每月一次；排隊中的追蹤被啟用時發給主人 |
 | 5 | 通知狀態的初始值與重置 | `watch_alert_states` 沒有資料 = 初始狀態；編輯查價條件或目標價後刪掉那筆 |
+
+## 2026-10-26 #7a 決策紀錄
+| # | 問題 | 決定 |
+|---|---|---|
+| 1 | SQS 與 notifier Lambda 是否保留（修正上表第 2 項的「SQS 叫醒 notifier」） | 拿掉。查價工作查完直接寄信；另外在查價後 1 小時、3 小時各排一次只重寄的工作。待寄的信本來就記在 DB，重寄只排兩次，避免頻繁叫醒 Neon 消耗免費運算時數 |
+| 2 | Lambda 數量 | 兩個：`api`（Mangum）、`jobs`（事件 `{"job": ...}` 決定查價、重寄或維護），同一份 image、不同 handler |
+| 3 | 機密怎麼給 Lambda | 冷啟動時讀 SSM 指定路徑下的參數寫進環境變數；不放 Lambda 環境變數，也不進 Terraform state |
+| 4 | 正式環境的 DB 連線池 | `ENV=prod` 用 NullPool；Lambda 凍結後連線常已斷，連線池交給 Neon pooler |
+| 5 | 請求大小 | 上限 64 KB，超過回 413 |
 
 ---
 

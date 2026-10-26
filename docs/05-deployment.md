@@ -5,7 +5,7 @@
 ## 環境
 | 環境 | 內容 |
 |---|---|
-| local | docker-compose（Postgres、MailHog、LocalStack SQS、mock provider） |
+| local | docker-compose（Postgres、api）、mock provider、console 寄信器（信印在 log） |
 | k8s-demo | kind + Helm（本機和 CI，M3） |
 | prod | AWS Serverless + Neon + Cloudflare DNS |
 

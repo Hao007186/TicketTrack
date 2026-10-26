@@ -16,6 +16,7 @@ from tests.conftest import BACKEND_DIR
         "app.jobs.maintenance",
         "app.jobs.check_prices",
         "app.jobs.send_notifications",
+        "app.lambda_handlers",
     ],
 )
 def test_entrypoint_registers_all_tables(module: str) -> None:

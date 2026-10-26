@@ -21,7 +21,8 @@ from app.modules.prices.providers import SERPAPI_TIMEOUT_SECONDS, get_provider
 from app.modules.prices.providers.base import ProviderError
 
 
-async def _main() -> int:
+async def run_check_prices() -> int:
+    """回傳 exit code：拿不到剩餘額度、這次沒查價時回 1。命令列和 Lambda 共用。"""
     settings = get_settings()
     logging.basicConfig(level=settings.log_level)
     exit_code = 0
@@ -50,4 +51,4 @@ async def _main() -> int:
 if __name__ == "__main__":
     # psycopg async 不支援 Windows 預設的 ProactorEventLoop
     loop_factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
-    sys.exit(asyncio.run(_main(), loop_factory=loop_factory))
+    sys.exit(asyncio.run(run_check_prices(), loop_factory=loop_factory))

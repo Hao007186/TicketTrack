@@ -6,8 +6,8 @@
 | 指標 | 告警條件 |
 |---|---|
 | Lambda 錯誤率 | 5 分鐘內錯誤 > 5 次 |
-| checker 是否有在跑 | 超過 25 小時沒有成功執行 |
-| DLQ 訊息數 | > 0 |
+| 查價是否有在跑 | 超過 25 小時沒有成功執行 |
+| jobs Lambda 執行失敗 | Errors > 0（查價拿不到額度、重寄或維護出錯） |
 | SerpApi／LINE 額度 | 用量 > 80% |
 | 通知信寄送失敗 | `alert_deliveries` 出現 `failed`；另外定期看 Resend 主控台的退信與投訴 |
 | AWS 費用 | > US$1 |
@@ -20,7 +20,7 @@
 | SerpApi 額度用完 | 自動暫停查價並發系統通知，下個月 1 號恢復；檢查用量紀錄是否有異常重試 |
 | SerpApi key 外洩（出現在 log、Git 或被盜用） | 到 SerpApi 網站重新產生 key（舊的立即失效）→ 更新 SSM Parameter Store（正式）或 `backend/.env`（本機）→ 重新部署；搜尋 CloudWatch log 確認是否還有含 key 的紀錄 |
 | SerpApi 停止服務或長期無法使用 | 查價暫停，發系統通知；透過 `PriceProvider` 介面換接其他供應商（例如 Duffel adapter） |
-| LINE 推播失敗或額度用完 | 改由 Email 送達；DLQ 告警後人工檢查 |
+| LINE 推播失敗或額度用完 | 改由 Email 送達；`alert_deliveries` 出現 `failed` 告警後人工檢查 |
 | Email 寄不出去 | 查 `alert_deliveries` 中 `status = 'failed'` 的 `last_error` → 檢查 Resend 主控台（API key 是否有效、網域驗證與 Cloudflare 的 DNS 記錄是否還在）→ 修好後把這些紀錄改回 `pending` 並把 `attempts` 設為 0 → 執行 `python -m app.jobs.send_notifications` 補寄 |
 | Resend 帳號被暫停或停止服務 | 改用其他支援 SMTP 的服務（Gmail SMTP 或 SES），只改 `SMTP_*` 與 `EMAIL_FROM` 設定；檢查退信／投訴原因 |
 | 註冊被濫用、價格通知寄到被冒用的信箱（退信率／投訴率告警） | 先暫時關閉註冊；再補上註冊頻率限制或 Cloudflare Turnstile，並對 Lambda 設 reserved concurrency |
