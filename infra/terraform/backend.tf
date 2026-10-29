@@ -3,7 +3,7 @@
 terraform {
   backend "s3" {
     key          = "prod/terraform.tfstate"
-    region       = "ap-southeast-1"
+    region       = "ap-southeast-2"
     use_lockfile = true
     encrypt      = true
   }

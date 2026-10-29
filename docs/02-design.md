@@ -49,7 +49,7 @@ EventBridge Scheduler（每天）──► Lambda: jobs {"job": "maintenance"}
      - 標記過期後補位（平時名額空出時已經立刻補位）
      - 超過保留期限的 price_snapshots 彙總成每日最低價後刪除（延後，資料量需要時再做）
 
-所有 Lambda ──► Neon PostgreSQL（新加坡區，pooler），Lambda 不放進 VPC，用 TLS 連線
+所有 Lambda ──► Neon PostgreSQL（雪梨區，與 Lambda 同在 ap-southeast-2，pooler），Lambda 不放進 VPC，用 TLS 連線
 機密資料 ──► SSM Parameter Store 標準版（含 X-Origin-Verify 密鑰），Lambda 冷啟動時讀取
 請求大小上限 64 KB（middleware 回 413）
 CloudWatch：錯誤（含 jobs Lambda 執行失敗）、額度、寄送失敗的通知信 → SNS 寄 Email 告警
