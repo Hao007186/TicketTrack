@@ -86,7 +86,7 @@ data "aws_cloudfront_origin_request_policy" "all_except_host" {
 }
 
 locals {
-  # https://xxx.lambda-url.ap-southeast-1.on.aws/ → xxx.lambda-url.ap-southeast-1.on.aws
+  # https://xxx.lambda-url.ap-southeast-2.on.aws/ → xxx.lambda-url.ap-southeast-2.on.aws
   api_origin_domain = trimsuffix(trimprefix(aws_lambda_function_url.api.function_url, "https://"), "/")
 }
 

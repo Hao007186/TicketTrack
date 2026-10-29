@@ -1,5 +1,6 @@
+# 帳號只開放 ap-southeast-2（雪梨），其他區域被 SCP 擋（us-east-1 的 ACM 例外）
 provider "aws" {
-  region = "ap-southeast-1"
+  region = "ap-southeast-2"
 
   default_tags {
     tags = {

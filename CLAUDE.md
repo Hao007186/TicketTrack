@@ -8,7 +8,7 @@
   - #1～#6、目標價參考價、#7a（Lambda handler）已合併
   - **#7b**（分支 `feat/m1-terraform`）：SES 寄信器、`infra/terraform/`、`infra/scripts/`、`docs/deploy-runbook.md` 已完成並通過部署前審查；**下一步是照 runbook 和使用者一起手動部署**（尚未建立任何雲端資源）
   - #7c（GitHub Actions 自動部署）尚未開始
-- 正式環境：`https://hao007186.com`，AWS ap-southeast-1，部署步驟見 `docs/deploy-runbook.md`
+- 正式環境：`https://hao007186.com`，AWS ap-southeast-2（帳號只開放雪梨），部署步驟見 `docs/deploy-runbook.md`
 - 架構文件是草稿第 3 版：`docs/architecture.md` 是總覽，`docs/01-requirements.md` ~ `docs/06-operations.md` 是 SDLC 6 個階段
 
 ## 何時讀哪份文件

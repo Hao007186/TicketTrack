@@ -14,8 +14,9 @@
 ## 一次性手動設定（寫進部署文件）
 完整步驟與指令見 [部署手冊](deploy-runbook.md)。
 - 購買網域（`hao007186.com`），將 DNS 交給 Cloudflare 管理；建立只能編輯這個網域 DNS 的 API token
-- 本機用 **IAM Identity Center** 登入 AWS（`aws sso login`，臨時金鑰），不用 root、不存長期金鑰
-- 建立 Neon 專案（新加坡區），把連線字串、JWT 密鑰、SerpApi key 用 AWS CLI 放進 SSM（不經過 Terraform）
+- 本機用 IAM 使用者 `farewatch-admin` 的**存取金鑰**登入 AWS（Free plan 帳號不能開 IAM Identity Center），不用 root
+- 所有 AWS 資源放 **ap-southeast-2（雪梨）**：帳號的 SCP 只開放這個區域（CloudFront 憑證照規定放 us-east-1）
+- 建立 Neon 專案（雪梨區），把連線字串、JWT 密鑰、SerpApi key 用 AWS CLI 放進 SSM（不經過 Terraform）
 - SES：網域驗證與 DNS 記錄由 Terraform 建立；手動驗證自己的信箱供沙盒期間測試，並申請解除沙盒
 - 建立 LINE Provider，並在其下建立 Login channel 和 Messaging API channel
 - 建立 Terraform state 用的 S3 bucket（避免雞生蛋問題，不由 Terraform 自己建立）

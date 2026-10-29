@@ -46,7 +46,7 @@ flowchart TB
     jobs --> email["Email（SES API，noreply@hao007186.com）"]
     jobs --> lineapi["LINE Messaging API（M2）"]
 
-    api --> db[("Neon PostgreSQL（新加坡區，pooler）")]
+    api --> db[("Neon PostgreSQL（雪梨區，pooler）")]
     jobs --> db
 
     ssm["SSM Parameter Store（機密資料）"] -.-> api
@@ -194,11 +194,12 @@ flowchart TB
 |---|---|---|
 | 1 | 寄信服務（修正 2026-10-24 #5 決策紀錄第 1 項的 Resend） | AWS 帳號已可用，改用 **SES API**：jobs Lambda 靠 IAM 權限寄信，不需要任何長期密碼；SMTP 寄信器保留當備援 |
 | 2 | 網址 | 網站放根網域 `https://hao007186.com`，寄件人 `noreply@hao007186.com`，MAIL FROM `mail.hao007186.com` |
-| 3 | 本機怎麼登入 AWS | IAM Identity Center（`aws sso login`），電腦上只有臨時金鑰 |
+| 3 | 本機怎麼登入 AWS | ~~IAM Identity Center（`aws sso login`），電腦上只有臨時金鑰~~ → 2026-10-29 修正：Free plan 帳號不能開 Identity Center，改用 IAM 使用者 `farewatch-admin` 的存取金鑰（profile `farewatch`） |
 | 4 | Cloudflare 要不要代理 | DNS only；CloudFront 已經是 CDN |
 | 5 | 前端網址（例如 `/watches/123`）在 S3 沒有檔案 | CloudFront Function 把沒有副檔名的路徑改寫成 `/index.html`；不用 CloudFront 的自訂錯誤回應，因為它會連 API 的 404 也改掉 |
 | 6 | 機密與 Terraform state | 只有 `origin_verify_secret` 由 Terraform 產生；資料庫網址、JWT 密鑰、SerpApi key 由使用者用 AWS CLI 放進 SSM，不進 state |
 | 7 | 排程時間（台灣時間） | 08:00 查價、09:00 與 11:00 重寄、00:10 維護；排程不自動重試，避免重複花 SerpApi 額度 |
+| 8 | 區域（2026-10-29 修正，原本是 ap-southeast-1 新加坡） | 全部改到 **ap-southeast-2（雪梨）**，Neon 也改雪梨。帳號有 AWS 端的 SCP，只開放雪梨（加上 us-east-1 的 ACM 與 CloudFront 等全球服務），其他區域一律拒絕，我們改不了 |
 | 8 | state 的鎖 | S3 backend 原生鎖（`use_lockfile`），不需要 DynamoDB |
 
 ---

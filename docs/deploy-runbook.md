@@ -8,13 +8,15 @@
 
 > **Git Bash 會把以 `/` 開頭的參數改寫成 Windows 路徑**（`/farewatch/prod/x` 會變成 `C:/Program Files/Git/farewatch/prod/x`）。所以 SSM、CloudWatch log 這類名稱以 `/` 開頭的 AWS 指令，前面都加了 `MSYS_NO_PATHCONV=1`，照抄即可。不要用 `export` 全域設定它，部署腳本需要這個轉換。
 
-> 終端機請用 **VS Code 內建的終端機（選 Git Bash）**；獨立的 Git Bash 視窗在 `aws configure sso` 選帳號時可能出錯。
+> 終端機請用 **VS Code 內建的終端機（選 Git Bash）**。每開一個新終端機，先執行 `export AWS_PROFILE=farewatch`，沒設的話 AWS 指令會出現 `NoCredentials`。
+
+> **區域一律用 ap-southeast-2（雪梨）。** 這個 AWS 帳號（Free plan）有一條我們改不了的組織政策（SCP），只開放雪梨；其他區域連列出清單都會出現 `explicit deny in a service control policy`。唯一例外是 CloudFront 用的 ACM 憑證放在 us-east-1，這也是允許的。主控台右上角的區域記得切到雪梨。
 
 ## 1. 會用到的帳號與工具
 
 | 項目 | 用途 |
 |---|---|
-| AWS 帳號（已驗證） | 所有雲端資源，區域 ap-southeast-1（新加坡） |
+| AWS 帳號（已驗證） | 所有雲端資源，區域 ap-southeast-2（雪梨） |
 | Cloudflare（已管理 hao007186.com 的 DNS） | 網站與寄信的 DNS 記錄 |
 | Neon | 正式環境的 PostgreSQL |
 | SerpApi | 查價 API key |
@@ -36,48 +38,41 @@ terraform version   # Terraform v1.10 以上
 aws --version       # aws-cli/2.x
 ```
 
-### 2.2 用 IAM Identity Center 登入 AWS
-平常不用 root 帳號（權限最大，連關閉帳號都可以）；改建一個管理員使用者，電腦上只拿幾小時就過期的臨時金鑰。
+### 2.2 建 IAM 使用者與存取金鑰
+平常不用 root 帳號（權限最大，連關閉帳號都可以），改建一個管理員 IAM 使用者給 CLI 用。
+（Free plan 帳號不能開 IAM Identity Center，所以用存取金鑰。）
 
-1. 用 root 帳號登入 AWS 主控台，右上角區域選「亞太區域（新加坡）ap-southeast-1」
+1. 用 root 帳號登入 AWS 主控台
 2. 建議先替 root 帳號開啟 MFA：右上角帳號名稱 → Security credentials → Assign MFA device
-3. 搜尋 **IAM Identity Center** → Enable（選 organization instance）
-4. 左側 **Users** → Add user：使用者名稱、你的 Email → 到信箱接受邀請並設定密碼
-5. 左側 **Permission sets** → Create permission set → Predefined → **AdministratorAccess**
-6. 左側 **AWS accounts** → 勾選你的帳號 → Assign users or groups → 選剛建的使用者 → 選 AdministratorAccess
-7. 左側 **Settings** → 記下 **AWS access portal URL**（`https://xxxx.awsapps.com/start`）
-8. 在 Git Bash 設定 CLI：
+3. 搜尋 **IAM** → 左側 **Users** → Create user
+   - User name：`farewatch-admin`，不用勾「Provide user access to the AWS Management Console」
+   - Permissions options：**Attach policies directly** → 只勾 **AdministratorAccess**
+   - **不要**設定 Permissions boundary（設了會讓權限被限縮，Terraform 會失敗）
+4. 點進 `farewatch-admin` → **Security credentials** → Access keys → **Create access key** → 用途選 **Command Line Interface (CLI)** → 複製 Access key ID 與 Secret access key（Secret 只顯示一次，不要貼進聊天）
+5. 在 Git Bash 設定 CLI：
    ```bash
-   aws configure sso
+   aws configure --profile farewatch
    ```
-   依序輸入：
    | 問題 | 輸入 |
    |---|---|
-   | SSO session name | `farewatch` |
-   | SSO start URL | 第 7 步的網址 |
-   | SSO region | `ap-southeast-1` |
-   | SSO registration scopes | 直接 Enter |
-
-   瀏覽器會打開讓你登入並允許。回到終端機選帳號與 AdministratorAccess，接著：
-   | 問題 | 輸入 |
-   |---|---|
-   | Default client Region | `ap-southeast-1` |
-   | CLI default output format | `json` |
-   | Profile name | `farewatch` |
-9. 之後每次操作前：
+   | AWS Access Key ID | 第 4 步的 Access key ID |
+   | AWS Secret Access Key | 第 4 步的 Secret access key |
+   | Default region name | `ap-southeast-2` |
+   | Default output format | `json` |
+6. 之後每次操作前：
    ```bash
    export AWS_PROFILE=farewatch
-   aws sso login              # 過期時重新登入
-   aws sts get-caller-identity   # 應該顯示你的帳號 ID 與 AWSReservedSSO_AdministratorAccess
+   aws sts get-caller-identity   # 應該顯示你的帳號 ID 與 user/farewatch-admin
    ```
+   金鑰外洩時：IAM → `farewatch-admin` → Security credentials → 把舊金鑰 Deactivate 再 Delete，建一把新的重跑第 5 步。
 
 ### 2.3 建立存放 Terraform state 的 S3 bucket
 Terraform 用 state 檔記住「已經建了哪些東西」。它一開始就需要地方存，所以這個 bucket 手動建：
 ```bash
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 STATE_BUCKET="farewatch-tfstate-$ACCOUNT_ID"
-aws s3api create-bucket --bucket "$STATE_BUCKET" --region ap-southeast-1 \
-  --create-bucket-configuration LocationConstraint=ap-southeast-1
+aws s3api create-bucket --bucket "$STATE_BUCKET" --region ap-southeast-2 \
+  --create-bucket-configuration LocationConstraint=ap-southeast-2
 aws s3api put-bucket-versioning --bucket "$STATE_BUCKET" \
   --versioning-configuration Status=Enabled
 aws s3api put-public-access-block --bucket "$STATE_BUCKET" \
@@ -87,7 +82,7 @@ echo "$STATE_BUCKET"   # 記下來，init 時要用
 
 ### 2.4 Neon 資料庫
 1. 到 <https://neon.tech> 註冊
-2. Create project：名稱 `farewatch`、Postgres 16、Region 選 **AWS Asia Pacific (Singapore)**
+2. Create project：名稱 `farewatch`、Postgres 16、Region 選 **AWS Asia Pacific (Sydney)**（和 Lambda 同區，查資料庫才不用跨區來回）
 3. 專案首頁 → **Connect**，複製兩組連線字串（都以 `postgresql://` 開頭、結尾有 `sslmode=require`）：
    - **Connection pooling 開啟**（主機名稱含 `-pooler`）：給 Lambda 用
    - **Connection pooling 關閉**：給 migration 用
@@ -131,7 +126,7 @@ cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars
 
 ### 2.8 SES：驗證自己的信箱、申請解除沙盒
 新帳號的 SES 在「沙盒」裡，只能寄給驗證過的信箱。
-1. 主控台搜尋 **Amazon SES**（區域 ap-southeast-1）→ Identities → Create identity → **Email address** → 輸入你要收測試信的信箱 → 到信箱點驗證連結
+1. 主控台搜尋 **Amazon SES**（區域 ap-southeast-2）→ Identities → Create identity → **Email address** → 輸入你要收測試信的信箱 → 到信箱點驗證連結
 2. 等第 3 節部署完、網域驗證通過後：SES → **Account dashboard** → Request production access
    - Mail type：Transactional
    - Website URL：`https://hao007186.com`
@@ -150,7 +145,6 @@ cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars
 ## 3. 第一次部署
 ```bash
 export AWS_PROFILE=farewatch
-aws sso login
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 TAG=$(git rev-parse --short HEAD)
 ```
@@ -250,4 +244,4 @@ TAG=$(git rev-parse --short HEAD)
 1. 清空前端 bucket（含所有版本）：S3 主控台選 `farewatch-frontend-<帳號 ID>` → Empty
 2. 刪除 ECR 裡的 image：ECR 主控台 → `farewatch-backend` → 全選 → Delete
 3. `terraform -chdir=infra/terraform destroy -var image_tag=x`
-4. 手動刪除：SSM 的四個參數（`MSYS_NO_PATHCONV=1 aws ssm delete-parameters --names ...`）、Neon 專案、state bucket、SES 驗證的個人信箱、Identity Center 使用者
+4. 手動刪除：SSM 的四個參數（`MSYS_NO_PATHCONV=1 aws ssm delete-parameters --names ...`）、Neon 專案、state bucket、SES 驗證的個人信箱、IAM 使用者 `farewatch-admin`（先刪存取金鑰）

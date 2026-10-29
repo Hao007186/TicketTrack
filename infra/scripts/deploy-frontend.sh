@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build 前端、上傳到 S3，並清掉 CloudFront 快取。
 # 用法：infra/scripts/deploy-frontend.sh
-# 事前：export AWS_PROFILE=farewatch 並 aws sso login；S3 與 CloudFront 已由 Terraform 建立
+# 事前：export AWS_PROFILE=farewatch；S3 與 CloudFront 已由 Terraform 建立
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
