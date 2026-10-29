@@ -187,7 +187,7 @@ TAG=$(git rev-parse --short HEAD)
    ```bash
    cd ../../backend
    read -rs DATABASE_URL && export DATABASE_URL
-   uv run alembic upgrade head
+   uv run python -m alembic upgrade head   # 不用 uv run alembic：alembic.exe 可能被 Windows 應用程式控制擋下
    uv run python -m app.seeds.reference
    uv run python -m app.seeds.demo
    unset DATABASE_URL
