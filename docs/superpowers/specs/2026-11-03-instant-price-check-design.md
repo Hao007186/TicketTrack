@@ -5,11 +5,17 @@
 相關文件：[architecture.md](../../architecture.md)、[02-design.md](../../02-design.md)、[#4 查價設計](2026-10-23-m1-prices-design.md)、[#5 通知設計](2026-10-24-m1-alerts-design.md)、[#6 前端設計](2026-10-25-m1-frontend-design.md)、[#7b 設計](2026-10-26-m1-terraform-design.md)
 
 ## 背景與目標
-目前建立追蹤後要等隔天 08:00 的排程才有第一筆價格，詳情頁在那之前是空的。改成建立追蹤或修改查價條件後立刻查價一次，並為此加上每人每天的次數上限，保護每月 250 次的 SerpApi 額度。
+目前建立追蹤後要等隔天 08:00 的排程才有第一筆價格，詳情頁在那之前是空的；填目標價時，新行程也沒有任何參考（[目標價參考價](2026-10-26-m1-price-reference-design.md)只有相同條件查過才有資料）。
+
+這份設計做兩件事，共用同一套查價流程與次數：
+- **立即查價：** 建立追蹤或修改查價條件後立刻查價一次
+- **表單查價：** 填目標價前可以按按鈕查目前價格，取代參考價設計當時不採用的 B 方案，因為現在有每人每天的次數上限保護每月 250 次的 SerpApi 額度
 
 **完成標準：**
 - 下方〈測試〉列出的案例全部通過，PR 上的 CI 全綠
-- 正式環境實測一次（花 1 次額度）：新增追蹤後，詳情頁顯示「查價中…」，數秒內出現價格；目標價設 100000 時，鈴鐺和信箱都當下收到通知
+- 正式環境實測（花 2 次額度）：
+  - 新增追蹤後，詳情頁顯示「查價中…」，數秒內出現價格；目標價設 100000 時，鈴鐺和信箱都當下收到通知
+  - 表單按「查目前價格」後顯示目前最低價，有典型區間時點「典型低價」會填入目標價；用同一組條件建立追蹤不再花額度
 
 ## 不在範圍內
 - 手動重試按鈕：失敗就等隔天 08:00 的排程
@@ -31,6 +37,8 @@
 | 通知信 | 查完價當下寄，每次最多 5 封；API Lambda 加 `ses:SendEmail` | 否則信可能要等到隔天 08:00。上限避免積壓的信拖到逾時，剩下的由排程寄 |
 | 修改警告 | 改到查價條件且追蹤不是暫停中時跳確認，和通知重置併成一個視窗 | 使用者要求修改前先警告；文字寫「最多」，因為相同條件今天查過就不會扣 |
 | 新增時 | 不警告 | 這是使用者要的預設行為 |
+| 表單查價 | 使用者按按鈕才查，按鈕文字寫「消耗 1 次」，和立即查價共用次數 | 使用者決定；當天再用同條件建立追蹤會走 `already_checked`，整個流程只花 1 次 |
+| 典型低價 | 有典型區間時提供一個快速選項，點了填入目標價 | 典型區間比當下價格穩定；只用已拿到的資料，不花額度 |
 
 ## 後端
 
@@ -82,6 +90,28 @@ model 放在 `app/modules/prices/models.py`。
 
 第 7 步發生未預期例外時回 500：SerpApi 額度已花，次數不退，`last_checked_at` 不還原。前端當成 `failed` 顯示。
 
+第 2～8 步拆成共用函式 `check_query(session, provider, settings, user, query, today)`，立即查價與表單查價都呼叫它。
+
+### 表單查價 API（`app/modules/prices/reference_router.py`）
+`POST /api/v1/price-reference/check`，body 用既有的 `QueryConditionsIn`。
+
+- 需要 `WritableUser`：示範帳號回 403，不花額度
+- 流程：拿 `acquire_watch_lock` → `validate_conditions`（不合法回 422）→ `get_or_create_price_query` → commit，再呼叫 `check_query`。沒有追蹤的 query 不會被每日排程查價，也不佔全站名額
+- 回應：
+
+```json
+{
+  "result": "checked",
+  "lowest_price": 9200,
+  "typical_low": 8200,
+  "typical_high": 11500
+}
+```
+
+- `result` 沒有 `not_eligible`，其他和上面的表相同
+- `lowest_price`：這個 query 台灣時間今天最新一筆 snapshot 的價格，沒有就是 null。`already_checked` 也從這裡讀，所以今天別人查過也拿得到
+- `typical_low`、`typical_high`：`price_baselines` 的值，沒有就是 null。除了 `checked`、`no_result`、`already_checked` 以外，三個價格欄位都是 null
+
 `checker.py` 的 `_restore` 改成公開函式 `restore_query`，讓 `instant.py` 使用。
 
 ### 逾時與寄信上限
@@ -95,6 +125,7 @@ model 放在 `app/modules/prices/models.py`。
 
 ### 資料取得（`src/api/queries.ts`）
 - 新增 `useCheckWatch`：用 `mutationKey: ["check", id]` 的 mutation。完成後讓這筆追蹤的價格、基準、通知和未讀數重新載入
+- 新增 `useCheckPriceReference`：呼叫表單查價 API 的 mutation，完成後讓通知和未讀數重新載入
 - 重新產生 openapi 型別
 
 ### 表單（`WatchFormPage`）
@@ -105,6 +136,23 @@ model 放在 `app/modules/prices/models.py`。
 > 修改查價條件後會立即查價一次，最多消耗今天 3 次中的 1 次；次數用完時會等明天 08:00 查價。通知狀態也會重置，之後的降價會重新判斷。確定要儲存嗎？
 
 - 其他會重置通知狀態的修改（只改目標價、暫停中的追蹤改條件）維持現有的 `RESET_CONFIRM`
+
+### 表單查價（`WatchFormPage`，新增與修改都有）
+目標價欄位旁加「查目前價格（消耗 1 次）」按鈕。查價條件不完整時（沿用 `referenceConditions`）停用；示範帳號用 `WriteButton` 停用。按下後按鈕顯示「查價中…」，表單其他欄位仍可操作。
+
+| 結果 | 顯示 |
+|---|---|
+| 有 `lowest_price` | 目前最低 NT$9,200｜典型價格 NT$8,200～11,500（沒有區間時省略後半） |
+| 有典型區間 | 另外顯示快速選項「典型低價 NT$8,200」，點了填入目標價 |
+| `lowest_price` 是 null 且有區間 | 目前查不到航班｜典型價格 NT$8,200～11,500 |
+| `no_result`，或 `already_checked` 且沒有任何價格 | 這組條件目前查不到航班 |
+| `user_limit` | 今天的查價次數已用完，可以直接填目標價建立追蹤；按鈕在這次填表期間停用 |
+| `site_limit`、`quota_exhausted` | 目前無法查價，可以直接填目標價建立追蹤 |
+| `failed` 或請求失敗 | 查價暫時失敗，可以再試一次 |
+
+- 查價條件一改就清掉結果，回到可按的狀態，避免舊條件的價格被當成新條件的
+- 有查價結果時，不顯示原本的參考價提示（`usePriceReference`），避免同一區塊出現兩組數字
+- 查價中送出表單：追蹤照常建立，建立後的立即查價可能回 `already_checked`，不會多花
 
 ### 詳情頁（`WatchDetailPage`）
 用 `useIsMutating` 與 `useMutationState` 讀同一個 `mutationKey` 的狀態，顯示一行提示：
@@ -134,6 +182,9 @@ model 放在 `app/modules/prices/models.py`。
 - 立即查價後，同一天的排程不再查這個 query
 - 查完價寄信；寄信失敗仍回 `checked`；寄信上限 5 封，`send_pending` 不傳 `limit` 時行為不變
 - 示範帳號 403、別人的追蹤 404、沒登入 401
+- 表單查價：回傳最低價與典型區間；不合法條件 422；示範帳號 403；和立即查價共用次數；只有 query、沒有追蹤時不會被排程查價，也不佔全站名額
+- 表單查價後，同一天用相同條件建立追蹤再立即查價，回 `already_checked`，`search` 只呼叫一次
+- `already_checked` 時 `lowest_price` 只取今天的 snapshot，昨天的不算
 
 **前端（vitest + MSW）**
 - 新增後發一次查價請求；排隊中不發
@@ -141,6 +192,7 @@ model 放在 `app/modules/prices/models.py`。
 - 警告只在條件有變且不是暫停中時出現，而且只跳一個視窗；取消後不送出
 - 詳情頁各種結果的提示文字；查價請求失敗時顯示失敗提示，追蹤本身正常顯示
 - 重新整理詳情頁不發查價請求
+- 表單查價：條件不完整時按鈕停用；各種結果的顯示；點「典型低價」填入目標價；沒有區間時不顯示快速選項；改條件後清掉結果；`user_limit` 後按鈕停用；示範帳號停用
 
 ## 上線順序
 資料庫先、前端最後，過程中舊版畫面仍可使用：
@@ -150,7 +202,7 @@ model 放在 `app/modules/prices/models.py`。
 4. 照〈完成標準〉實測一次
 
 ## 文件更新
-- `docs/01-requirements.md`：查價頻率與額度策略加上立即查價
-- `docs/02-design.md`：〈額度策略〉、〈API 草案〉、資料表
+- `docs/01-requirements.md`：查價頻率與額度策略加上立即查價與表單查價
+- `docs/02-design.md`：〈額度策略〉、〈API 草案〉、〈目標價參考價〉、資料表
 - `docs/04-testing.md`：對應測試項目
 - `CLAUDE.md`：目前狀態
