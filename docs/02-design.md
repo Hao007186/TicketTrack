@@ -12,7 +12,7 @@
 | 容器 | 同一份 backend Dockerfile（AWS Lambda Python 基底）建出**單一架構** image：arm64 推到 **ECR** 給 Lambda，amd64 只在本機和 CI 建給 kind 用；frontend 用 Nginx image（只給 k8s 用） | Lambda 不接受 multi-arch manifest，build 時要加 `--provenance=false`；見下方〈容器執行方式〉 |
 | k8s | **本機 kind + CI 驗證**，用 Helm chart 部署 | 單人維護正式環境的 k8s 成本高；用來學習和展示 |
 | 網域／DNS | 自有網域，DNS 放 **Cloudflare**（免費） | Route 53 每月 US$0.50；Terraform 有 Cloudflare provider |
-| Email | 正式環境用 **SES API**（`SesEmailSender`，靠 jobs Lambda 的 IAM 權限，自有網域 + Easy DKIM + 自訂 MAIL FROM）；本機預設 console 寄信器（只印 log）；SMTP 寄信器保留當備援 | 不需要任何長期密碼；`EmailSender` 介面讓三種寄信器只差設定（見 [#7b 決策紀錄](architecture.md#2026-10-26-7b-決策紀錄)） |
+| Email | 正式環境用 **SES API**（`SesEmailSender`，靠 jobs、API Lambda 的 IAM 權限，自有網域 + Easy DKIM + 自訂 MAIL FROM）；本機預設 console 寄信器（只印 log）；SMTP 寄信器保留當備援 | 不需要任何長期密碼；`EmailSender` 介面讓三種寄信器只差設定（見 [#7b 決策紀錄](architecture.md#2026-10-26-7b-決策紀錄)） |
 | IaC | Terraform（state 存 S3） | 一鍵建立／刪除所有資源 |
 
 ## 容器執行方式
@@ -62,6 +62,7 @@ CloudWatch：錯誤（含 jobs Lambda 執行失敗）、額度、寄送失敗的
 - **每天排程一次，輪流查價**：每次執行先向 SerpApi 查剩餘次數（`/account.json`，不花額度），今日預算 = `ceil(剩餘次數 ÷ 本月剩餘天數（含今天）)`，從最久沒查的 query 開始查，查到預算用完為止。無條件進位讓月底剩少量額度時仍能每天查，預算也永遠不超過剩餘次數。
 - **防止重複查價**：每個 query 查價前先用條件式更新「搶下」（台灣時間今天還沒查過才搶得到），每個 query 各自 commit；失敗時還原 `last_checked_at`，明天優先重查；連續 3 次失敗就停止。排程重試或兩個程式同時跑都不會重複花額度。
 - **一次查價只花 1 次呼叫**：來回票的第一次回應就包含來回總價和 `price_insights`，不再用 `departure_token` 查回程；訂票連結使用回應中的 Google Flights 網址，不花額度換 `booking_token`。2026-10-20 已用真實回應確認（見[總覽〈M0 SerpApi 實驗紀錄〉](architecture.md#m0-serpapi-實驗紀錄2026-10-20)）。
+- **立即查價**：建立追蹤或修改查價條件後，前端另外發 `POST /watches/{id}/check`；表單的「查目前價格」按鈕發 `POST /price-reference/check`。兩者共用同一套流程與次數：相同條件今天查過就不花額度也不扣次數；**每人每天 3 次**（台灣時間換日）；全站當天總數不超過當日預算，防止多帳號用光月額度。呼叫 SerpApi 前先扣次數，失敗或逾時（查額度與查價合計 15 秒）就退回；查完當下寄通知信，每次最多 5 封，剩下的由排程寄。細節見[立即查價設計](superpowers/specs/2026-11-03-instant-price-check-design.md)。
 - **用量估算**：250 次／月約等於每天 8 次，所以每個 query 大約每「active query 數 ÷ 8」天查到一次。全站上限訂為 **8 個** active price_query，讓每個 query 每天都查得到；放寬到 20 個的話會變成約 2.5 天一次。
 - **額度用完**：暫停查價到下個月 1 號，並發一則系統通知。動態預算正常運作時額度不會提前用完，發生時要檢查是否有異常重試。
 - 相同條件的追蹤合併成同一個 price_query，額度只花一次。
@@ -302,11 +303,12 @@ erDiagram
 - `notifications`(id, public_id, user_id, type(price_alert/system), title, body, link, alert_id NULL, dedupe_key NULL, is_read, created_at, UQ(user_id, dedupe_key))：站內通知中心；`dedupe_key` 防止系統通知重複（例如 `quota_exhausted:2026-11`）；刪除追蹤後通知保留、`alert_id` 設為 NULL
 - `alert_deliveries`(id, alert_id, channel, status(pending/sent/failed/skipped), attempts, last_error, sent_at, created_at)，UQ(alert_id, channel)：notifier 的寄件匣；`last_error` 已遮掉 SMTP 密碼
 - `api_usage`(provider, month, count)
+- `instant_check_usage`(user_id FK ON DELETE CASCADE, day, count, PK(user_id, day))：每人每天用了幾次立即查價，`day` 是台灣時間的日期
 
 ## API 草案（/api/v1，FastAPI 自動產生 OpenAPI 文件）
 - Auth：`POST /auth/register|login|refresh|logout|demo`、`GET /me`
 - LINE：`GET /me/line/link`、`GET /auth/line/callback`、`GET/DELETE /me/line`、`POST /line/webhook`
-- Watches：`GET/POST /watches`（`?status=` 篩選）、`GET/PATCH/DELETE /watches/{id}`（PATCH 也用來暫停／恢復）、`GET /watches/{id}/prices?range=`、`GET /watches/{id}/baseline`、`GET /price-reference`（新增／編輯表單的參考價：完全相同條件的典型價格區間，不花額度）
+- Watches：`GET/POST /watches`（`?status=` 篩選）、`GET/PATCH/DELETE /watches/{id}`（PATCH 也用來暫停／恢復）、`GET /watches/{id}/prices?range=`、`GET /watches/{id}/baseline`、`POST /watches/{id}/check`（立即查價）、`POST /price-reference/check`（表單查目前價格，花次數）、`GET /price-reference`（新增／編輯表單的參考價：完全相同條件的典型價格區間，不花額度）
 - 通知：`GET /notifications`（`?watch_id=` 篩選某個追蹤的價格通知）、`PATCH /notifications/{id}/read`、`POST /notifications/read-all`、`GET/PATCH /me/notification-settings`
 - 參考資料：`GET /airports`、`GET /airlines`；Admin：`GET /admin/usage`
 - 健康檢查：`GET /health`
@@ -316,7 +318,7 @@ erDiagram
 
 **示範帳號：** 頂部固定顯示「你正在使用示範帳號，資料為唯讀」；寫入按鈕照樣顯示但不能按，滑過去提示「示範帳號無法修改」，讓訪客看得到網站有哪些功能。版面以電腦為主，手機寬度能用即可。細節見 [#6 前端設計](superpowers/specs/2026-10-25-m1-frontend-design.md)。
 
-**目標價參考價：** 新增／編輯表單填好查價條件後，若資料庫已有完全相同條件的典型價格區間就顯示在目標價下方，沒有就提示第一次查價後會顯示；不花查價額度。細節見 [目標價參考價設計](superpowers/specs/2026-10-26-m1-price-reference-design.md)。
+**目標價參考價：** 新增／編輯表單填好查價條件後，若資料庫已有完全相同條件的典型價格區間就顯示在目標價下方，沒有就提示第一次查價後會顯示；不花查價額度。使用者也可以按「查目前價格（消耗 1 次）」當場查，並用「典型低價」填入目標價。細節見 [目標價參考價設計](superpowers/specs/2026-10-26-m1-price-reference-design.md)。
 
 **追蹤詳情的價格圖：** SerpApi 價格畫成主線，加上目標價線和典型價格區間色帶；下方列出最近通知和訂票連結。
 
