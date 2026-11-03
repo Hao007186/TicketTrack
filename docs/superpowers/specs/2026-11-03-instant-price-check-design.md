@@ -124,7 +124,7 @@ model 放在 `app/modules/prices/models.py`。
 ## 前端
 
 ### 資料取得（`src/api/queries.ts`）
-- 新增 `useCheckWatch`：用 `mutationKey: ["check", id]` 的 mutation。完成後讓這筆追蹤的價格、基準、通知和未讀數重新載入
+- 新增 `useCheckWatch`：用 `mutationKey: ["check"]` 的 mutation，追蹤 id 當 variables（新增時 id 要等建立成功才知道）。完成後讓這筆追蹤的價格、基準、通知和未讀數重新載入
 - 新增 `useCheckPriceReference`：呼叫表單查價 API 的 mutation，完成後讓通知和未讀數重新載入
 - 重新產生 openapi 型別
 
@@ -149,13 +149,14 @@ model 放在 `app/modules/prices/models.py`。
 | `user_limit` | 今天的查價次數已用完，可以直接填目標價建立追蹤；按鈕在這次填表期間停用 |
 | `site_limit`、`quota_exhausted` | 目前無法查價，可以直接填目標價建立追蹤 |
 | `failed` 或請求失敗 | 查價暫時失敗，可以再試一次 |
+| 回 422（例如出發日超出可查範圍） | 顯示後端的錯誤訊息 |
 
 - 查價條件一改就清掉結果，回到可按的狀態，避免舊條件的價格被當成新條件的
 - 有查價結果時，不顯示原本的參考價提示（`usePriceReference`），避免同一區塊出現兩組數字
 - 查價中送出表單：追蹤照常建立，建立後的立即查價可能回 `already_checked`，不會多花
 
 ### 詳情頁（`WatchDetailPage`）
-用 `useIsMutating` 與 `useMutationState` 讀同一個 `mutationKey` 的狀態，顯示一行提示：
+用 `useMutationState` 讀同一個 `mutationKey` 中 variables 等於這筆追蹤的最新一筆，顯示一行提示：
 
 | 狀態 | 顯示 |
 |---|---|
