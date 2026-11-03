@@ -22,6 +22,7 @@ export type PriceRange = "30d" | "90d" | "all";
 export type Notification = components["schemas"]["NotificationOut"];
 export type PriceReference = components["schemas"]["PriceReferenceOut"];
 export type InstantCheck = components["schemas"]["InstantCheckOut"];
+export type PriceCheck = components["schemas"]["PriceCheckOut"];
 
 // 寫入成功後用這些 key 讓相關資料重新抓取；前綴相同的 key 會一起失效
 export const keys = {
@@ -258,6 +259,22 @@ export function usePriceReference(cond: ReferenceConditions | null) {
       unwrap(await api.GET("/api/v1/price-reference", { params: { query: cond! } })),
     enabled: cond !== null,
     staleTime: 5 * 60_000,
+  });
+}
+
+/** 表單的「查目前價格」：會花查價次數，所以只在使用者按下時才查。 */
+export function useCheckPriceReference() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (cond: ReferenceConditions) =>
+      unwrap(await api.POST("/api/v1/price-reference/check", { body: cond })),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["price-reference"] }),
+        queryClient.invalidateQueries({ queryKey: keys.notifications }),
+      ]),
+    // 表單自己顯示結果，不跳全域提示
+    meta: { silent: true },
   });
 }
 

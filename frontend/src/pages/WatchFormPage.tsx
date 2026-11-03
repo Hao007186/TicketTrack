@@ -5,12 +5,14 @@ import { ApiError, errorMessage } from "../api/errors";
 import {
   useAirlines,
   useAirports,
+  useCheckPriceReference,
   useCheckWatch,
   useCreateWatch,
   usePriceReference,
   useUpdateWatch,
   useWatch,
   type Airport,
+  type PriceCheck,
   type Watch,
 } from "../api/queries";
 import { PageMessage, WATCH_MISSING } from "../components/PageMessage";
@@ -111,6 +113,89 @@ function PriceReferenceHint({ values, editing }: { values: WatchFormValues; edit
         (updated_at ? `（${formatMonthDay(updated_at)} 更新）` : "")
       : `這個行程還沒有價格資料，${editing ? "儲存" : "建立"}後第一次查價就會顯示，之後可以再調整目標價`;
   return <p className="mt-1 text-xs text-slate-500">{text}</p>;
+}
+
+const CHECK_FAILED_TEXT = "查價暫時失敗，可以再試一次";
+const CHECK_RESULT_TEXTS: Partial<Record<PriceCheck["result"], string>> = {
+  user_limit: "今天的查價次數已用完，可以直接填目標價建立追蹤",
+  site_limit: "目前無法查價，可以直接填目標價建立追蹤",
+  quota_exhausted: "目前無法查價，可以直接填目標價建立追蹤",
+  failed: CHECK_FAILED_TEXT,
+};
+
+function priceSummary({ lowest_price: lowest, typical_low: low, typical_high: high }: PriceCheck) {
+  const typical =
+    low !== null && high !== null ? `典型價格 ${formatPrice(low)}～${formatPrice(high)}` : null;
+  if (lowest !== null) {
+    const current = `目前最低 ${formatPrice(lowest)}`;
+    return typical ? `${current}｜${typical}` : current;
+  }
+  return typical ? `目前查不到航班｜${typical}` : "這組條件目前查不到航班";
+}
+
+/** 目標價下方：按鈕查目前價格（會花次數），有結果前先顯示資料庫已有的參考價。 */
+function TargetPriceHelp({
+  values,
+  editing,
+  onPick,
+}: {
+  values: WatchFormValues;
+  editing: boolean;
+  onPick: (price: number) => void;
+}) {
+  const check = useCheckPriceReference();
+  const cond = referenceConditions(values);
+  const conditionKey = JSON.stringify(cond);
+  // 結果連同當時的條件一起存：條件一改就不再顯示，查價中改條件時也不會把舊價格當成新的
+  const [outcome, setOutcome] = useState<{
+    key: string;
+    data?: PriceCheck;
+    message?: string;
+  } | null>(null);
+  const [limitReached, setLimitReached] = useState(false);
+  const current = outcome?.key === conditionKey ? outcome : null;
+  const data = current?.data;
+  const message = current?.message ?? (data && CHECK_RESULT_TEXTS[data.result]);
+  const hasPrices = data !== undefined && !message;
+
+  function onCheck() {
+    if (!cond) return;
+    check.mutate(cond, {
+      onSuccess: (result) => {
+        setOutcome({ key: conditionKey, data: result });
+        if (result.result === "user_limit") setLimitReached(true);
+      },
+      onError: (err) =>
+        setOutcome({
+          key: conditionKey,
+          message: err instanceof ApiError && err.status === 422 ? err.message : CHECK_FAILED_TEXT,
+        }),
+    });
+  }
+
+  return (
+    <div className="mt-2 space-y-1">
+      <WriteButton
+        className={buttonSecondary}
+        disabled={!cond || check.isPending || limitReached}
+        onClick={onCheck}
+      >
+        {check.isPending ? "查價中…" : "查目前價格（消耗 1 次）"}
+      </WriteButton>
+      {message && <p className="text-xs text-slate-500">{message}</p>}
+      {hasPrices && <p className="text-xs text-slate-700">{priceSummary(data)}</p>}
+      {hasPrices && data.typical_low !== null && data.typical_high !== null && (
+        <button
+          type="button"
+          className="text-xs text-blue-600 underline"
+          onClick={() => onPick(data.typical_low!)}
+        >
+          典型低價 {formatPrice(data.typical_low)}
+        </button>
+      )}
+      {!hasPrices && <PriceReferenceHint values={values} editing={editing} />}
+    </div>
+  );
 }
 
 function WatchForm({ original }: { original?: Watch }) {
@@ -306,7 +391,11 @@ function WatchForm({ original }: { original?: Watch }) {
             value={values.targetPrice}
             onChange={(e) => set("targetPrice", e.target.value)}
           />
-          <PriceReferenceHint values={values} editing={original !== undefined} />
+          <TargetPriceHelp
+            values={values}
+            editing={original !== undefined}
+            onPick={(price) => set("targetPrice", String(price))}
+          />
         </Field>
       </div>
 

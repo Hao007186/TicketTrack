@@ -445,3 +445,221 @@ describe("立即查價", () => {
     expect(screen.queryByText("查價中…")).not.toBeInTheDocument();
   });
 });
+
+describe("表單查價", () => {
+  const BUTTON = "查目前價格（消耗 1 次）";
+  const URL = "/api/v1/price-reference/check";
+  const PRICES = {
+    result: "checked",
+    lowest_price: 9200,
+    typical_low: 8200,
+    typical_high: 11500,
+  };
+  const NO_PRICES = { lowest_price: null, typical_low: null, typical_high: null };
+
+  function mockCheck(response: object) {
+    const bodies: unknown[] = [];
+    server.use(
+      http.post(URL, async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json(response);
+      }),
+    );
+    return bodies;
+  }
+
+  async function press() {
+    await userEvent.click(screen.getByRole("button", { name: BUTTON }));
+  }
+
+  it("條件不完整時停用", async () => {
+    mockCommon();
+    renderApp("/watches/new");
+    expect(await screen.findByRole("button", { name: BUTTON })).toBeDisabled();
+  });
+
+  it("示範帳號停用", async () => {
+    mockCommon();
+    renderApp("/watches/new", { user: demo });
+    await fillValid();
+    expect(screen.getByRole("button", { name: BUTTON })).toBeDisabled();
+  });
+
+  it("顯示目前最低與典型價格，隱藏原本的參考價提示", async () => {
+    mockCommon();
+    const bodies = mockCheck(PRICES);
+    renderApp("/watches/new");
+    await fillValid();
+    expect(await screen.findByText(/這個行程還沒有價格資料/)).toBeInTheDocument();
+    await press();
+    expect(
+      await screen.findByText("目前最低 NT$ 9,200｜典型價格 NT$ 8,200～NT$ 11,500"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/這個行程還沒有價格資料/)).not.toBeInTheDocument();
+    expect(bodies).toEqual([
+      {
+        origin: "TPE",
+        destination: "NRT",
+        depart_date: DEPART,
+        return_date: RETURN,
+        cabin: "economy",
+        adults: 1,
+        airlines: [],
+      },
+    ]);
+  });
+
+  it("沒有區間時只顯示最低價，沒有快速選項", async () => {
+    mockCommon();
+    mockCheck({ ...PRICES, typical_low: null, typical_high: null });
+    renderApp("/watches/new");
+    await fillValid();
+    await press();
+    expect(await screen.findByText("目前最低 NT$ 9,200")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /典型低價/ })).not.toBeInTheDocument();
+  });
+
+  it("查不到航班但有區間", async () => {
+    mockCommon();
+    mockCheck({ ...PRICES, result: "no_result", lowest_price: null });
+    renderApp("/watches/new");
+    await fillValid();
+    await press();
+    expect(
+      await screen.findByText("目前查不到航班｜典型價格 NT$ 8,200～NT$ 11,500"),
+    ).toBeInTheDocument();
+  });
+
+  it.each(["no_result", "already_checked"])("%s 且沒有任何價格", async (result) => {
+    mockCommon();
+    mockCheck({ result, ...NO_PRICES });
+    renderApp("/watches/new");
+    await fillValid();
+    await press();
+    expect(await screen.findByText("這組條件目前查不到航班")).toBeInTheDocument();
+  });
+
+  it("點典型低價填入目標價", async () => {
+    mockCommon();
+    mockCheck(PRICES);
+    renderApp("/watches/new");
+    await fillValid();
+    await press();
+    await userEvent.click(await screen.findByRole("button", { name: "典型低價 NT$ 8,200" }));
+    expect(screen.getByLabelText("目標價（TWD）")).toHaveValue("8200");
+  });
+
+  it("改條件後結果消失，按鈕可再按", async () => {
+    mockCommon();
+    mockCheck(PRICES);
+    renderApp("/watches/new");
+    await fillValid();
+    await press();
+    await screen.findByText(/目前最低/);
+    await userEvent.selectOptions(screen.getByLabelText("目的地"), "KIX");
+    expect(screen.queryByText(/目前最低/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: BUTTON })).toBeEnabled();
+  });
+
+  it("查價中改條件，回來的舊結果不顯示；連按只發一個請求", async () => {
+    mockCommon();
+    let calls = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.post(URL, async () => {
+        calls += 1;
+        await gate;
+        return HttpResponse.json(PRICES);
+      }),
+    );
+    renderApp("/watches/new");
+    await fillValid();
+    await press();
+    const pending = await screen.findByRole("button", { name: "查價中…" });
+    expect(pending).toBeDisabled();
+    await userEvent.click(pending);
+    await userEvent.selectOptions(screen.getByLabelText("目的地"), "KIX");
+    release();
+    await screen.findByRole("button", { name: BUTTON });
+    expect(calls).toBe(1);
+    expect(screen.queryByText(/目前最低/)).not.toBeInTheDocument();
+  });
+
+  it("user_limit 提示並停用按鈕，表單仍可送出", async () => {
+    mockCommon();
+    mockCheck({ result: "user_limit", ...NO_PRICES });
+    const created = makeWatch();
+    mockDetail(created);
+    server.use(http.post("/api/v1/watches", () => HttpResponse.json(created, { status: 201 })));
+    renderApp("/watches/new");
+    await fillValid();
+    await press();
+    expect(
+      await screen.findByText("今天的查價次數已用完，可以直接填目標價建立追蹤"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: BUTTON })).toBeDisabled();
+    await userEvent.selectOptions(screen.getByLabelText("目的地"), "KIX");
+    expect(screen.getByRole("button", { name: BUTTON })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "建立追蹤" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(`/watches/${created.public_id}`),
+    );
+  });
+
+  it.each(["site_limit", "quota_exhausted"])("%s 的提示", async (result) => {
+    mockCommon();
+    mockCheck({ result, ...NO_PRICES });
+    renderApp("/watches/new");
+    await fillValid();
+    await press();
+    expect(await screen.findByText("目前無法查價，可以直接填目標價建立追蹤")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: BUTTON })).toBeEnabled();
+  });
+
+  it("failed 可以再試一次", async () => {
+    mockCommon();
+    mockCheck({ result: "failed", ...NO_PRICES });
+    renderApp("/watches/new");
+    await fillValid();
+    await press();
+    expect(await screen.findByText("查價暫時失敗，可以再試一次")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: BUTTON })).toBeEnabled();
+  });
+
+  it("請求失敗時顯示失敗提示", async () => {
+    mockCommon();
+    server.use(http.post(URL, () => HttpResponse.error()));
+    renderApp("/watches/new");
+    await fillValid();
+    await press();
+    expect(await screen.findByText("查價暫時失敗，可以再試一次")).toBeInTheDocument();
+  });
+
+  it("回 422 時顯示後端訊息", async () => {
+    mockCommon();
+    server.use(
+      http.post(URL, () =>
+        HttpResponse.json({ detail: "depart_date：出發日必須在範圍內" }, { status: 422 }),
+      ),
+    );
+    renderApp("/watches/new");
+    await fillValid();
+    await press();
+    expect(await screen.findByText(/出發日必須在範圍內/)).toBeInTheDocument();
+    expect(screen.queryByText("查價暫時失敗，可以再試一次")).not.toBeInTheDocument();
+  });
+
+  it("修改追蹤的表單也能查價", async () => {
+    mockCommon();
+    mockCheck(PRICES);
+    const watch = makeWatch({ depart_date: DEPART, return_date: RETURN });
+    mockGetWatch(watch);
+    renderApp(`/watches/${watch.public_id}/edit`);
+    await screen.findByLabelText("目標價（TWD）");
+    await press();
+    expect(await screen.findByText(/目前最低/)).toBeInTheDocument();
+  });
+});
