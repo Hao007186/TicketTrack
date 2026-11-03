@@ -11,9 +11,10 @@ from app.modules.notifications.messages import QUOTA_TITLE
 from app.modules.notifications.models import Notification
 from app.modules.prices import instant
 from app.modules.prices.checker import run_checks
-from app.modules.prices.instant import InstantResult, check_query, check_watch, reserve_slot
+from app.modules.prices.instant import check_query, check_watch, reserve_slot
 from app.modules.prices.models import InstantCheckUsage, PriceSnapshot
 from app.modules.prices.providers.base import ProviderError, SearchResult
+from app.modules.prices.schemas import InstantResult
 from app.modules.users.models import User
 from app.modules.watches.models import PriceQuery, Watch
 from app.modules.watches.slots import QueryConditions

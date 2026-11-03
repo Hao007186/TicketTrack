@@ -23,6 +23,7 @@ from app.modules.prices.checker import (
 )
 from app.modules.prices.models import InstantCheckUsage
 from app.modules.prices.providers.base import PriceProvider, ProviderError
+from app.modules.prices.schemas import InstantResult
 from app.modules.watches.models import PriceQuery, Watch
 from app.modules.watches.service import conditions_of
 from app.modules.watches.slots import STOP_CHECK_DAYS
@@ -35,17 +36,6 @@ INSTANT_LOCK_KEY = 0x46415246
 # 查額度與查價合計；API Lambda 上限 30 秒，要留時間給記錄結果與寄信
 INSTANT_TIMEOUT_SECONDS: float = 15
 MAX_EMAILS_PER_CHECK = 5
-
-InstantResult = Literal[
-    "checked",
-    "no_result",
-    "already_checked",
-    "not_eligible",
-    "user_limit",
-    "site_limit",
-    "quota_exhausted",
-    "failed",
-]
 
 
 def _utcnow() -> datetime:
