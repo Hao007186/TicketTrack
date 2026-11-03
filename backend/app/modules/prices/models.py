@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     CheckConstraint,
@@ -50,6 +50,18 @@ class PriceBaseline(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class InstantCheckUsage(Base):
+    """每人每天用了幾次立即查價；day 是台灣時間的日期。"""
+
+    __tablename__ = "instant_check_usage"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    day: Mapped[date] = mapped_column(primary_key=True)
+    count: Mapped[int]
 
 
 class ApiUsage(Base):
