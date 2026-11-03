@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { makeWatch } from "../test/data";
 import {
+  changesConditions,
   emptyForm,
   fromWatch,
   referenceConditions,
@@ -179,4 +180,17 @@ describe("referenceConditions", () => {
   it("目標價沒填也照樣回傳條件", () => {
     expect(referenceConditions(valid({ targetPrice: "" }))).not.toBeNull();
   });
+});
+
+describe("changesConditions", () => {
+  it("只改目標價不算", () => {
+    expect(changesConditions({ target_price: 8000 })).toBe(false);
+  });
+
+  it.each(["origin", "destination", "depart_date", "return_date", "cabin", "adults", "airlines"])(
+    "%s 算改條件",
+    (field) => {
+      expect(changesConditions({ [field]: null })).toBe(true);
+    },
+  );
 });

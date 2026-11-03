@@ -164,6 +164,29 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "InstantCheckOut": {
+        "properties": {
+          "result": {
+            "enum": [
+              "checked",
+              "no_result",
+              "already_checked",
+              "not_eligible",
+              "user_limit",
+              "site_limit",
+              "quota_exhausted",
+              "failed"
+            ],
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "InstantCheckOut",
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -298,6 +321,66 @@
         "title": "NotificationSettingsUpdate",
         "type": "object"
       },
+      "PriceCheckOut": {
+        "description": "表單查價的結果；結果不是 checked、no_result、already_checked 時價格都是 null。",
+        "properties": {
+          "lowest_price": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lowest Price"
+          },
+          "result": {
+            "enum": [
+              "checked",
+              "no_result",
+              "already_checked",
+              "not_eligible",
+              "user_limit",
+              "site_limit",
+              "quota_exhausted",
+              "failed"
+            ],
+            "title": "Result",
+            "type": "string"
+          },
+          "typical_high": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typical High"
+          },
+          "typical_low": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typical Low"
+          }
+        },
+        "required": [
+          "result",
+          "lowest_price",
+          "typical_low",
+          "typical_high"
+        ],
+        "title": "PriceCheckOut",
+        "type": "object"
+      },
       "PricePoint": {
         "properties": {
           "airline_iata": {
@@ -373,6 +456,73 @@
           "updated_at"
         ],
         "title": "PriceReferenceOut",
+        "type": "object"
+      },
+      "QueryConditionsIn": {
+        "description": "查價條件（不含目標價）；建立追蹤和查參考價共用。",
+        "properties": {
+          "adults": {
+            "default": 1,
+            "maximum": 9.0,
+            "minimum": 1.0,
+            "title": "Adults",
+            "type": "integer"
+          },
+          "airlines": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Airlines",
+            "type": "array"
+          },
+          "cabin": {
+            "default": "economy",
+            "enum": [
+              "economy",
+              "premium_economy",
+              "business",
+              "first"
+            ],
+            "title": "Cabin",
+            "type": "string"
+          },
+          "depart_date": {
+            "format": "date",
+            "title": "Depart Date",
+            "type": "string"
+          },
+          "destination": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Destination",
+            "type": "string"
+          },
+          "origin": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Origin",
+            "type": "string"
+          },
+          "return_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Date"
+          }
+        },
+        "required": [
+          "origin",
+          "destination",
+          "depart_date"
+        ],
+        "title": "QueryConditionsIn",
         "type": "object"
       },
       "RegisterRequest": {
@@ -1473,6 +1623,52 @@
         ]
       }
     },
+    "/api/v1/price-reference/check": {
+      "post": {
+        "operationId": "check_price_reference_api_v1_price_reference_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryConditionsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Price Reference",
+        "tags": [
+          "prices"
+        ]
+      }
+    },
     "/api/v1/watches": {
       "get": {
         "operationId": "list_watches_api_v1_watches_get",
@@ -1770,6 +1966,54 @@
           }
         ],
         "summary": "Get Baseline",
+        "tags": [
+          "prices"
+        ]
+      }
+    },
+    "/api/v1/watches/{public_id}/check": {
+      "post": {
+        "operationId": "check_now_api_v1_watches__public_id__check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstantCheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Now",
         "tags": [
           "prices"
         ]

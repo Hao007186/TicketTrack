@@ -30,3 +30,28 @@ class PriceReferenceOut(BaseModel):
     typical_low: int | None
     typical_high: int | None
     updated_at: datetime | None
+
+
+InstantResult = Literal[
+    "checked",
+    "no_result",
+    "already_checked",
+    "not_eligible",
+    "user_limit",
+    "site_limit",
+    "quota_exhausted",
+    "failed",
+]
+
+
+class InstantCheckOut(BaseModel):
+    result: InstantResult
+
+
+class PriceCheckOut(BaseModel):
+    """表單查價的結果；結果不是 checked、no_result、already_checked 時價格都是 null。"""
+
+    result: InstantResult
+    lowest_price: int | None
+    typical_low: int | None
+    typical_high: int | None

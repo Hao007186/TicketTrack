@@ -1,16 +1,19 @@
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.clock import get_today
 from app.db.session import get_session
-from app.modules.auth.deps import CurrentUser
+from app.modules.auth.deps import CurrentUser, WritableUser
 from app.modules.prices.baseline import history_ready
+from app.modules.prices.deps import ProviderDep, SenderDep, SettingsDep
+from app.modules.prices.instant import check_watch
 from app.modules.prices.models import PriceBaseline, PriceSnapshot
-from app.modules.prices.schemas import BaselineOut, PricePoint, PriceRange
+from app.modules.prices.schemas import BaselineOut, InstantCheckOut, PricePoint, PriceRange
 from app.modules.users.models import User
 from app.modules.watches import service as watch_service
 from app.modules.watches.models import Watch
@@ -18,6 +21,7 @@ from app.modules.watches.models import Watch
 router = APIRouter(prefix="/watches", tags=["prices"])
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+TodayDep = Annotated[date, Depends(get_today)]
 _RANGE_DAYS = {"30d": 30, "90d": 90}
 
 
@@ -26,6 +30,21 @@ async def _own_watch(session: AsyncSession, user: User, public_id: uuid.UUID) ->
         return await watch_service.get_watch(session, user, public_id)
     except watch_service.WatchNotFound:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到追蹤") from None
+
+
+@router.post("/{public_id}/check")
+async def check_now(
+    public_id: uuid.UUID,
+    user: WritableUser,
+    session: SessionDep,
+    provider: ProviderDep,
+    sender: SenderDep,
+    settings: SettingsDep,
+    today: TodayDep,
+) -> InstantCheckOut:
+    watch = await _own_watch(session, user, public_id)
+    result = await check_watch(session, provider, sender, settings.app_base_url, watch, today)
+    return InstantCheckOut(result=result)
 
 
 @router.get("/{public_id}/prices")

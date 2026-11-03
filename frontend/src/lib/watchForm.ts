@@ -155,7 +155,7 @@ export function toUpdateBody(v: WatchFormValues, original: Watch): WatchUpdate {
   return body;
 }
 
-const RESET_FIELDS: (keyof WatchUpdate)[] = [
+const CONDITION_FIELDS: (keyof WatchUpdate)[] = [
   "origin",
   "destination",
   "depart_date",
@@ -163,8 +163,13 @@ const RESET_FIELDS: (keyof WatchUpdate)[] = [
   "cabin",
   "adults",
   "airlines",
-  "target_price",
 ];
+const RESET_FIELDS: (keyof WatchUpdate)[] = [...CONDITION_FIELDS, "target_price"];
+
+/** 改了查價條件時會立即查價；只改目標價不用。 */
+export function changesConditions(body: WatchUpdate): boolean {
+  return CONDITION_FIELDS.some((field) => field in body);
+}
 
 /** 改了查價條件或目標價時，後端會重置通知狀態。 */
 export function resetsAlertState(body: WatchUpdate): boolean {

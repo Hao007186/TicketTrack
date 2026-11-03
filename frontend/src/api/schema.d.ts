@@ -243,6 +243,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/price-reference/check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Check Price Reference */
+    post: operations["check_price_reference_api_v1_price_reference_check_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/watches": {
     parameters: {
       query?: never;
@@ -291,6 +308,23 @@ export interface paths {
     get: operations["get_baseline_api_v1_watches__public_id__baseline_get"];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/watches/{public_id}/check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Check Now */
+    post: operations["check_now_api_v1_watches__public_id__check_post"];
     delete?: never;
     options?: never;
     head?: never;
@@ -362,6 +396,22 @@ export interface components {
       /** Detail */
       detail?: components["schemas"]["ValidationError"][];
     };
+    /** InstantCheckOut */
+    InstantCheckOut: {
+      /**
+       * Result
+       * @enum {string}
+       */
+      result:
+        | "checked"
+        | "no_result"
+        | "already_checked"
+        | "not_eligible"
+        | "user_limit"
+        | "site_limit"
+        | "quota_exhausted"
+        | "failed";
+    };
     /** LoginRequest */
     LoginRequest: {
       /**
@@ -417,6 +467,31 @@ export interface components {
       /** Email Enabled */
       email_enabled: boolean;
     };
+    /**
+     * PriceCheckOut
+     * @description 表單查價的結果；結果不是 checked、no_result、already_checked 時價格都是 null。
+     */
+    PriceCheckOut: {
+      /** Lowest Price */
+      lowest_price: number | null;
+      /**
+       * Result
+       * @enum {string}
+       */
+      result:
+        | "checked"
+        | "no_result"
+        | "already_checked"
+        | "not_eligible"
+        | "user_limit"
+        | "site_limit"
+        | "quota_exhausted"
+        | "failed";
+      /** Typical High */
+      typical_high: number | null;
+      /** Typical Low */
+      typical_low: number | null;
+    };
     /** PricePoint */
     PricePoint: {
       /** Airline Iata */
@@ -440,6 +515,39 @@ export interface components {
       typical_low: number | null;
       /** Updated At */
       updated_at: string | null;
+    };
+    /**
+     * QueryConditionsIn
+     * @description 查價條件（不含目標價）；建立追蹤和查參考價共用。
+     */
+    QueryConditionsIn: {
+      /**
+       * Adults
+       * @default 1
+       */
+      adults: number;
+      /**
+       * Airlines
+       * @default []
+       */
+      airlines: string[];
+      /**
+       * Cabin
+       * @default economy
+       * @enum {string}
+       */
+      cabin: "economy" | "premium_economy" | "business" | "first";
+      /**
+       * Depart Date
+       * Format: date
+       */
+      depart_date: string;
+      /** Destination */
+      destination: string;
+      /** Origin */
+      origin: string;
+      /** Return Date */
+      return_date?: string | null;
     };
     /** RegisterRequest */
     RegisterRequest: {
@@ -1006,6 +1114,39 @@ export interface operations {
       };
     };
   };
+  check_price_reference_api_v1_price_reference_check_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["QueryConditionsIn"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PriceCheckOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
   list_watches_api_v1_watches_get: {
     parameters: {
       query?: {
@@ -1183,6 +1324,37 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["BaselineOut"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  check_now_api_v1_watches__public_id__check_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        public_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InstantCheckOut"];
         };
       };
       /** @description Validation Error */

@@ -9,7 +9,7 @@ resource "aws_sesv2_email_identity_mail_from_attributes" "domain" {
   behavior_on_mx_failure = "USE_DEFAULT_VALUE"
 }
 
-# 只有 jobs Lambda 會寄信
+# jobs Lambda 和 API Lambda（立即查價後當下寄信）都會寄信
 data "aws_iam_policy_document" "send_email" {
   statement {
     actions = ["ses:SendEmail"]
@@ -21,5 +21,11 @@ data "aws_iam_policy_document" "send_email" {
 resource "aws_iam_role_policy" "jobs_send_email" {
   name   = "send-email"
   role   = aws_iam_role.jobs.id
+  policy = data.aws_iam_policy_document.send_email.json
+}
+
+resource "aws_iam_role_policy" "api_send_email" {
+  name   = "send-email"
+  role   = aws_iam_role.api.id
   policy = data.aws_iam_policy_document.send_email.json
 }
