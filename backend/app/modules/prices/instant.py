@@ -26,7 +26,7 @@ from app.modules.prices.providers.base import PriceProvider, ProviderError
 from app.modules.prices.schemas import InstantResult
 from app.modules.watches.models import PriceQuery, Watch
 from app.modules.watches.service import conditions_of
-from app.modules.watches.slots import STOP_CHECK_DAYS
+from app.modules.watches.slots import STOP_CHECK_DAYS, occupied_query_ids
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,12 @@ async def check_query(
         await session.commit()
         return "quota_exhausted"
 
-    budget = None if remaining is None else daily_budget(remaining, today)
+    # 每個啟用中的 query 每天留一次給排程，立即查價只能用剩下的，兩者合計才不會超過每日預算
+    budget = (
+        None
+        if remaining is None
+        else max(0, daily_budget(remaining, today) - len(await occupied_query_ids(session, today)))
+    )
     reserved = await reserve_slot(session, user_id, today, budget)
     if reserved != "ok":
         return reserved

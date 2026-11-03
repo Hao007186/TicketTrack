@@ -272,6 +272,8 @@ export function useCheckPriceReference() {
       Promise.all([
         queryClient.invalidateQueries({ queryKey: ["price-reference"] }),
         queryClient.invalidateQueries({ queryKey: keys.notifications }),
+        // 查價中就送出或取消時，已經跳到詳情頁，價格要等這裡完成才有
+        queryClient.invalidateQueries({ queryKey: keys.watches }),
       ]),
     // 表單自己顯示結果，不跳全域提示
     meta: { silent: true },

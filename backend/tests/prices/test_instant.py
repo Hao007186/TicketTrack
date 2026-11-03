@@ -275,3 +275,41 @@ async def test_check_query_without_watch(db_session: AsyncSession) -> None:
 
     assert result == "checked"
     assert len(provider.calls) == 1
+
+
+async def test_site_limit_reserves_budget_for_daily_job(db_session: AsyncSession) -> None:
+    """啟用中的 query 每天都要留一次給排程，立即查價只能用剩下的。"""
+    user = await create_user(db_session)
+    watch = await insert_watch(db_session, user, destination="NRT")
+    await insert_watch(db_session, user, destination="KIX")
+    await insert_watch(db_session, user, destination="ICN")
+    # 11/1 還有 30 天；剩 90 次時每日預算 3，全部留給 3 個啟用中的 query
+    provider = FakeProvider(remaining=90)
+
+    assert await _check(db_session, watch, provider) == "site_limit"
+
+    assert provider.calls == []
+    assert await _used(db_session, user.id) == 0
+
+
+async def test_site_limit_leaves_rest_of_budget_for_instant(db_session: AsyncSession) -> None:
+    user = await create_user(db_session)
+    watch = await insert_watch(db_session, user, destination="NRT")
+    await insert_watch(db_session, user, destination="KIX")
+    # 每日預算 3，留 2 次給排程，立即查價還有 1 次
+    provider = FakeProvider(remaining=90)
+
+    assert await _check(db_session, watch, provider) == "checked"
+
+    other = await insert_watch(db_session, user, status="paused", destination="ICN")
+    result = await check_query(
+        db_session,
+        provider,
+        FakeSender(),
+        BASE_URL,
+        user.id,
+        other.price_query,
+        TODAY,
+        now=lambda: NOW,
+    )
+    assert result == "site_limit"

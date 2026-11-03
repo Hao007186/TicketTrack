@@ -663,3 +663,42 @@ describe("表單查價", () => {
     expect(await screen.findByText(/目前最低/)).toBeInTheDocument();
   });
 });
+
+describe("表單查價中就送出", () => {
+  it("表單查價完成後，詳情頁會更新價格", async () => {
+    mockCommon();
+    const created = makeWatch();
+    mockDetail(created);
+    let priced = false;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.post("/api/v1/price-reference/check", async () => {
+        await gate;
+        priced = true;
+        return HttpResponse.json({
+          result: "checked",
+          lowest_price: 9100,
+          typical_low: null,
+          typical_high: null,
+        });
+      }),
+      http.post("/api/v1/watches", () => HttpResponse.json(created, { status: 201 })),
+      http.post("/api/v1/watches/:id/check", () =>
+        HttpResponse.json({ result: "already_checked" }),
+      ),
+      http.get(`/api/v1/watches/${created.public_id}/baseline`, () =>
+        HttpResponse.json({ ...emptyBaseline, latest_price: priced ? 9100 : null }),
+      ),
+    );
+    renderApp("/watches/new");
+    await fillValid();
+    await userEvent.click(screen.getByRole("button", { name: "查目前價格（消耗 1 次）" }));
+    await userEvent.click(screen.getByRole("button", { name: "建立追蹤" }));
+    expect(await screen.findByText("尚無價格")).toBeInTheDocument();
+    release();
+    expect(await screen.findByText("NT$ 9,100")).toBeInTheDocument();
+  });
+});

@@ -30,7 +30,7 @@
 | 觸發方式 | 新增或改條件成功後，前端另外發 `POST /watches/{id}/check` | Lambda 回應後就會被凍結，不能在背景查價；分開請求讓建立追蹤永遠很快，查價失敗也不影響追蹤。比交給 jobs Lambda 少一套權限與輪詢 |
 | 發送時機 | 表單送出成功時發一次，不是詳情頁載入時 | 重新整理頁面不會多花額度 |
 | 每人上限 | 每天 3 次，台灣時間換日 | 使用者決定；等於每人的追蹤上限，正常使用不會碰到 |
-| 全站上限 | 全站當天立即查價總數不超過 `daily_budget(remaining, today)` | 每人上限擋不住多帳號；公開註冊下要保護月額度 |
+| 全站上限 | 全站當天立即查價總數不超過 `max(0, daily_budget(remaining, today) − 啟用中的 query 數)` | 每人上限擋不住多帳號；每個啟用中的 query 每天留一次給排程，兩者合計才不會超過每日預算，排程不會被餓死 |
 | 免費情況 | 相同條件今天已查過就不呼叫 SerpApi，也不扣次數 | 沿用「每個 query 每天最多查一次」的規則 |
 | 失敗時 | 退回次數、還原 `last_checked_at` | 使用者不必為系統失敗付出次數；排程隔天優先重查 |
 | 逾時 | 查額度與查價合計 15 秒；排程維持 60 秒 | API Lambda 上限 30 秒，要留時間給記錄結果與寄信 |
@@ -80,7 +80,7 @@ model 放在 `app/modules/prices/models.py`。
    - 失敗或逾時 → `failed`
    - 回 0 → 呼叫 `notify_quota_exhausted`，回 `quota_exhausted`
    - 回 None（mock）→ 下一步不檢查全站上限
-4. 短 transaction：拿 advisory lock（新的鍵，和 `WATCH_LOCK_KEY` 分開）→ 這個人今天已達 3 次回 `user_limit` → 全站今天總數達 `daily_budget` 回 `site_limit` → 這個人的 `count` 加 1 → commit。鎖讓同時發多個請求也不會超過上限；呼叫 SerpApi 前就放掉
+4. 短 transaction：拿 advisory lock（新的鍵，和 `WATCH_LOCK_KEY` 分開）→ 這個人今天已達 3 次回 `user_limit` → 全站今天總數達全站上限回 `site_limit` → 這個人的 `count` 加 1 → commit。鎖讓同時發多個請求也不會超過上限；呼叫 SerpApi 前就放掉
 5. 沿用 `claim_query` 搶下 query；沒搶到（別人剛好在查）→ 退回次數，回 `already_checked`
 6. `provider.search()`：`ProviderError` 或逾時 → 用 `_restore` 還原 `last_checked_at`、退回次數，回 `failed`
 7. 沿用 `record_result` 記錄（含觸發規則與 `api_usage`）→ 回 `checked` 或 `no_result`
