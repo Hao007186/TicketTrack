@@ -58,11 +58,15 @@ async def send_pending(
     sender: EmailSender,
     base_url: str,
     now: Callable[[], datetime] = _utcnow,
+    limit: int | None = None,
 ) -> SendSummary:
+    """limit 是這次最多嘗試寄幾封，剩下的留給下次執行。"""
     summary = SendSummary()
     # 這次執行失敗過的不再取出，留給下次執行重試
     failed_ids: list[int] = []
     while True:
+        if limit is not None and summary.sent + summary.failed + summary.retry >= limit:
+            return summary
         row = (
             await session.execute(
                 select(

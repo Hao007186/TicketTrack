@@ -90,7 +90,7 @@ async def claim_query(
     return claimed is not None, previous
 
 
-async def _restore(session: AsyncSession, query_id: int, previous: datetime | None) -> None:
+async def restore_query(session: AsyncSession, query_id: int, previous: datetime | None) -> None:
     await session.execute(
         update(PriceQuery).where(PriceQuery.id == query_id).values(last_checked_at=previous)
     )
@@ -177,7 +177,7 @@ async def run_checks(
             result = await provider.search(conditions_of(query))
         except ProviderError as e:
             logger.warning("查價失敗（query %s）：%s", query.id, e)
-            await _restore(session, query.id, previous)
+            await restore_query(session, query.id, previous)
             summary.failed += 1
             consecutive_failures += 1
             if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:

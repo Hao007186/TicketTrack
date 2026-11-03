@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.alerts.models import AlertDelivery
@@ -58,6 +58,34 @@ async def _send(session: AsyncSession, sender: FakeSender) -> SendSummary:
 async def _reload(session: AsyncSession, delivery: AlertDelivery) -> AlertDelivery:
     await session.refresh(delivery)
     return delivery
+
+
+async def test_limit_stops_after_n(db_session: AsyncSession) -> None:
+    await _pending(db_session)
+    user = await create_user(db_session, email="bob@example.com")
+    for destination in ("KIX", "ICN"):
+        watch = await insert_watch(db_session, user, target_price=9500, destination=destination)
+        snapshot = PriceSnapshot(
+            price_query_id=watch.price_query_id,
+            provider="mock",
+            price=9000,
+            stops=0,
+            observed_at=NOW,
+        )
+        db_session.add(snapshot)
+        await db_session.flush()
+        await create_alert(
+            db_session, watch, snapshot.id, 9000, DECISION, created_at=NOW, deliver=True
+        )
+    sender = FakeSender()
+
+    summary = await send_pending(db_session, sender, BASE_URL, now=lambda: NOW, limit=2)
+
+    assert summary == SendSummary(sent=2)
+    pending = await db_session.scalar(
+        select(func.count()).select_from(AlertDelivery).where(AlertDelivery.status == "pending")
+    )
+    assert pending == 1
 
 
 async def test_send_success(db_session: AsyncSession) -> None:
