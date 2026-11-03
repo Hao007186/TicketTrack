@@ -4,7 +4,7 @@ import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { addDays, todayInTaipei } from "../lib/format";
-import { makeWatch, mockCommon, mockDetail, mockWatches } from "../test/data";
+import { emptyBaseline, makeWatch, mockCommon, mockDetail, mockWatches } from "../test/data";
 import { demo } from "../test/fixtures";
 import { renderApp } from "../test/render";
 import { server } from "../test/server";
@@ -119,7 +119,9 @@ describe("編輯追蹤", () => {
     await userEvent.click(await screen.findByLabelText("單程"));
     await userEvent.click(screen.getByRole("button", { name: "儲存" }));
     await waitFor(() => expect(body).toEqual({ return_date: null }));
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("通知狀態會重置"));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("最多消耗今天 3 次中的 1 次"));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("通知狀態也會重置"));
   });
 
   it("取消確認時不送出", async () => {
@@ -256,5 +258,190 @@ describe("參考價", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(screen.queryByText(HAS_DATA)).not.toBeInTheDocument();
     expect(screen.queryByText(/壞掉了/)).not.toBeInTheDocument();
+  });
+});
+
+describe("立即查價", () => {
+  function recordChecks() {
+    const checks: string[] = [];
+    server.use(
+      http.post("/api/v1/watches/:id/check", ({ params }) => {
+        checks.push(params.id as string);
+        return HttpResponse.json({ result: "checked" });
+      }),
+    );
+    return checks;
+  }
+
+  async function createWatch(created: ReturnType<typeof makeWatch>) {
+    mockDetail(created);
+    server.use(http.post("/api/v1/watches", () => HttpResponse.json(created, { status: 201 })));
+    renderApp("/watches/new");
+    await fillValid();
+    await userEvent.click(screen.getByRole("button", { name: "建立追蹤" }));
+  }
+
+  function editable(status: "active" | "paused" = "active") {
+    const watch = makeWatch({ status, depart_date: DEPART, return_date: RETURN });
+    mockDetail(watch);
+    server.use(http.patch(`/api/v1/watches/${watch.public_id}`, () => HttpResponse.json(watch)));
+    return watch;
+  }
+
+  it("新增後發一次查價請求", async () => {
+    mockCommon();
+    const checks = recordChecks();
+    const created = makeWatch();
+    await createWatch(created);
+    await waitFor(() => expect(checks).toEqual([created.public_id]));
+    expect(screen.getByTestId("location")).toHaveTextContent(`/watches/${created.public_id}`);
+  });
+
+  it("排隊中不發查價請求", async () => {
+    mockCommon();
+    const checks = recordChecks();
+    await createWatch(makeWatch({ status: "queued" }));
+    expect(await screen.findByText("全站名額已滿，排隊中，暫不查價")).toBeInTheDocument();
+    expect(checks).toEqual([]);
+  });
+
+  it("改條件後發一次查價請求", async () => {
+    mockCommon();
+    const checks = recordChecks();
+    const watch = editable();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderApp(`/watches/${watch.public_id}/edit`);
+    await userEvent.click(await screen.findByLabelText("單程"));
+    await userEvent.click(screen.getByRole("button", { name: "儲存" }));
+    await waitFor(() => expect(checks).toEqual([watch.public_id]));
+  });
+
+  it("只改目標價不查價，維持原本的確認文字", async () => {
+    mockCommon();
+    const checks = recordChecks();
+    const watch = editable();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderApp(`/watches/${watch.public_id}/edit`);
+    const price = await screen.findByLabelText("目標價（TWD）");
+    await userEvent.clear(price);
+    await userEvent.type(price, "8000");
+    await userEvent.click(screen.getByRole("button", { name: "儲存" }));
+    await screen.findByRole("button", { name: "編輯" });
+    expect(confirm).toHaveBeenCalledWith("通知狀態會重置，之後的降價會重新判斷。確定要儲存嗎？");
+    expect(checks).toEqual([]);
+  });
+
+  it("暫停中改條件不警告額度，也不查價", async () => {
+    mockCommon();
+    const checks = recordChecks();
+    const watch = editable("paused");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderApp(`/watches/${watch.public_id}/edit`);
+    await userEvent.click(await screen.findByLabelText("單程"));
+    await userEvent.click(screen.getByRole("button", { name: "儲存" }));
+    await screen.findByRole("button", { name: "編輯" });
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledWith("通知狀態會重置，之後的降價會重新判斷。確定要儲存嗎？");
+    expect(checks).toEqual([]);
+  });
+
+  it("取消額度警告時不送出、不查價", async () => {
+    mockCommon();
+    const checks = recordChecks();
+    const watch = editable();
+    let patched = false;
+    server.use(
+      http.patch(`/api/v1/watches/${watch.public_id}`, () => {
+        patched = true;
+        return HttpResponse.json(watch);
+      }),
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderApp(`/watches/${watch.public_id}/edit`);
+    await userEvent.click(await screen.findByLabelText("單程"));
+    await userEvent.click(screen.getByRole("button", { name: "儲存" }));
+    expect(patched).toBe(false);
+    expect(checks).toEqual([]);
+  });
+
+  it("查價中顯示提示，完成後重新載入價格", async () => {
+    mockCommon();
+    const created = makeWatch();
+    let baselineCalls = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    mockDetail(created);
+    server.use(
+      http.get(`/api/v1/watches/${created.public_id}/baseline`, () => {
+        baselineCalls += 1;
+        return HttpResponse.json({
+          ...emptyBaseline,
+          latest_price: baselineCalls > 1 ? 9100 : null,
+        });
+      }),
+      http.post("/api/v1/watches/:id/check", async () => {
+        await gate;
+        return HttpResponse.json({ result: "checked" });
+      }),
+      http.post("/api/v1/watches", () => HttpResponse.json(created, { status: 201 })),
+    );
+    renderApp("/watches/new");
+    await fillValid();
+    await userEvent.click(screen.getByRole("button", { name: "建立追蹤" }));
+    expect(await screen.findByText("查價中…")).toBeInTheDocument();
+    release();
+    expect(await screen.findByText("NT$ 9,100")).toBeInTheDocument();
+    expect(screen.queryByText("查價中…")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["no_result", "這組條件目前查不到航班，明天 08:00 會再查"],
+    ["not_eligible", "出發前 2 天內不再查價"],
+    ["user_limit", "今天的立即查價次數已用完，明天 08:00 會自動查價"],
+    ["site_limit", "目前無法立即查價，之後的排程會自動查價"],
+    ["quota_exhausted", "目前無法立即查價，之後的排程會自動查價"],
+    ["failed", "查價暫時失敗，明天 08:00 會再試"],
+  ])("結果 %s 顯示提示", async (result, text) => {
+    mockCommon();
+    server.use(http.post("/api/v1/watches/:id/check", () => HttpResponse.json({ result })));
+    await createWatch(makeWatch());
+    expect(await screen.findByText(text)).toBeInTheDocument();
+  });
+
+  it.each(["checked", "already_checked"])("結果 %s 不顯示提示", async (result) => {
+    mockCommon();
+    let done = false;
+    server.use(
+      http.post("/api/v1/watches/:id/check", () => {
+        done = true;
+        return HttpResponse.json({ result });
+      }),
+    );
+    await createWatch(makeWatch());
+    await waitFor(() => expect(done).toBe(true));
+    await waitFor(() => expect(screen.queryByText("查價中…")).not.toBeInTheDocument());
+    expect(screen.queryByText(/08:00|無法立即查價/)).not.toBeInTheDocument();
+  });
+
+  it("查價請求斷線：追蹤正常顯示，只有失敗提示，沒有全域錯誤", async () => {
+    mockCommon();
+    server.use(http.post("/api/v1/watches/:id/check", () => HttpResponse.error()));
+    await createWatch(makeWatch());
+    expect(await screen.findByText("查價暫時失敗，明天 08:00 會再試")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "編輯" })).toBeInTheDocument();
+    expect(screen.queryByText(/網路|連線/)).not.toBeInTheDocument();
+  });
+
+  it("直接打開詳情頁不發查價請求", async () => {
+    mockCommon();
+    const checks = recordChecks();
+    const watch = makeWatch();
+    mockDetail(watch);
+    renderApp(`/watches/${watch.public_id}`);
+    await screen.findByRole("button", { name: "編輯" });
+    expect(checks).toEqual([]);
+    expect(screen.queryByText("查價中…")).not.toBeInTheDocument();
   });
 });

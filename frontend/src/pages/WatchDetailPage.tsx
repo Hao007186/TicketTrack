@@ -5,11 +5,13 @@ import { ApiError } from "../api/errors";
 import {
   useAirports,
   useBaseline,
+  useCheckState,
   useDeleteWatch,
   usePrices,
   useSetPaused,
   useWatch,
   useWatchNotifications,
+  type InstantCheck,
   type PriceRange,
   type Watch,
 } from "../api/queries";
@@ -34,6 +36,27 @@ const STATUS_HINTS: Partial<Record<Watch["status"], string>> = {
   queued: "全站名額已滿，排隊中，暫不查價",
   paused: "已暫停，不會查價",
 };
+
+const CHECK_FAILED = "查價暫時失敗，明天 08:00 會再試";
+const CHECK_HINTS: Partial<Record<InstantCheck["result"], string>> = {
+  no_result: "這組條件目前查不到航班，明天 08:00 會再查",
+  user_limit: "今天的立即查價次數已用完，明天 08:00 會自動查價",
+  site_limit: "目前無法立即查價，之後的排程會自動查價",
+  quota_exhausted: "目前無法立即查價，之後的排程會自動查價",
+  failed: CHECK_FAILED,
+};
+
+function checkHint(watch: Watch, check: ReturnType<typeof useCheckState>): string | undefined {
+  if (!check) return undefined;
+  if (check.status === "pending") return "查價中…";
+  if (check.status === "error") return CHECK_FAILED;
+  const result = check.data?.result;
+  if (result === "not_eligible") {
+    // 排隊中、已暫停的原因已經由 STATUS_HINTS 顯示
+    return watch.status === "active" ? "出發前 2 天內不再查價" : undefined;
+  }
+  return result && CHECK_HINTS[result];
+}
 
 function StatCard({ title, value, note }: { title: string; value: string; note?: string }) {
   return (
@@ -120,6 +143,7 @@ function Detail({ watch }: { watch: Watch }) {
   const prices = usePrices(id, range);
   const { data: notifications } = useWatchNotifications(id);
   const hint = STATUS_HINTS[watch.status];
+  const check = checkHint(watch, useCheckState(id));
 
   const typical =
     baseline?.typical_low != null && baseline.typical_high != null
@@ -138,6 +162,7 @@ function Detail({ watch }: { watch: Watch }) {
     <div className="space-y-6">
       <Header watch={watch} />
       {hint && <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">{hint}</p>}
+      {check && <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-900">{check}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

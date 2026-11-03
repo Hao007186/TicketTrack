@@ -5,6 +5,7 @@ import { ApiError, errorMessage } from "../api/errors";
 import {
   useAirlines,
   useAirports,
+  useCheckWatch,
   useCreateWatch,
   usePriceReference,
   useUpdateWatch,
@@ -29,6 +30,7 @@ import {
   emptyForm,
   fromWatch,
   referenceConditions,
+  changesConditions,
   resetsAlertState,
   toCreateBody,
   toUpdateBody,
@@ -39,6 +41,8 @@ import {
 
 const QUEUED_HINT = "目前全站名額已滿，有空位時會自動開始查價";
 const RESET_CONFIRM = "通知狀態會重置，之後的降價會重新判斷。確定要儲存嗎？";
+const CHECK_CONFIRM =
+  "修改查價條件後會立即查價一次，最多消耗今天 3 次中的 1 次；次數用完時會等明天 08:00 查價。通知狀態也會重置，之後的降價會重新判斷。確定要儲存嗎？";
 
 const COUNTRY_NAMES: Record<string, string> = {
   JP: "日本",
@@ -116,6 +120,7 @@ function WatchForm({ original }: { original?: Watch }) {
   const { data: airlines = [] } = useAirlines();
   const create = useCreateWatch();
   const update = useUpdateWatch(original?.public_id ?? "");
+  const checkWatch = useCheckWatch();
   const [values, setValues] = useState<WatchFormValues>(() =>
     original ? fromWatch(original) : emptyForm(),
   );
@@ -152,18 +157,28 @@ function WatchForm({ original }: { original?: Watch }) {
 
     try {
       let saved: Watch;
+      let shouldCheck = true;
       if (original) {
         const body = toUpdateBody(values, original);
         if (Object.keys(body).length === 0) {
           navigate(`/watches/${original.public_id}`);
           return;
         }
-        if (resetsAlertState(body) && !window.confirm(RESET_CONFIRM)) return;
+        shouldCheck = changesConditions(body);
+        const warning =
+          shouldCheck && original.status !== "paused"
+            ? CHECK_CONFIRM
+            : resetsAlertState(body)
+              ? RESET_CONFIRM
+              : null;
+        if (warning && !window.confirm(warning)) return;
         saved = await update.mutateAsync(body);
       } else {
         saved = await create.mutateAsync(toCreateBody(values));
       }
       if (saved.status === "queued") toast.show(QUEUED_HINT);
+      // 不等結果：跳到詳情頁後由那裡顯示查價進度
+      if (shouldCheck && saved.status === "active") checkWatch.mutate(saved.public_id);
       navigate(`/watches/${saved.public_id}`);
     } catch (err) {
       setSubmitError(errorMessage(err));

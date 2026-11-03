@@ -62,6 +62,7 @@ export function mockCommon({ unread = 0 }: { unread?: number } = {}) {
     http.get("/api/v1/price-reference", () =>
       HttpResponse.json({ typical_low: null, typical_high: null, updated_at: null }),
     ),
+    http.post("/api/v1/watches/:id/check", () => HttpResponse.json({ result: "checked" })),
   );
 }
 

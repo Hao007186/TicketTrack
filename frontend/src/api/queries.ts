@@ -1,4 +1,11 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useMutationState,
+  useQuery,
+  useQueryClient,
+  type MutationState,
+} from "@tanstack/react-query";
 
 import type { ReferenceConditions } from "../lib/watchForm";
 import { api, unwrap } from "./client";
@@ -14,6 +21,7 @@ export type PricePoint = components["schemas"]["PricePoint"];
 export type PriceRange = "30d" | "90d" | "all";
 export type Notification = components["schemas"]["NotificationOut"];
 export type PriceReference = components["schemas"]["PriceReferenceOut"];
+export type InstantCheck = components["schemas"]["InstantCheckOut"];
 
 // 寫入成功後用這些 key 讓相關資料重新抓取；前綴相同的 key 會一起失效
 export const keys = {
@@ -111,6 +119,43 @@ export function useSetPaused(id: string) {
       ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.watches }),
   });
+}
+
+const CHECK_MUTATION_KEY = ["check"];
+
+/**
+ * 立即查價。新增時 id 要等建立成功才知道，所以當 variables 傳入；
+ * 失效寫在這裡而不是 mutate 的 callback，表單跳頁卸載後才仍會執行。
+ */
+export function useCheckWatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: CHECK_MUTATION_KEY,
+    mutationFn: async (id: string) =>
+      unwrap(
+        await api.POST("/api/v1/watches/{public_id}/check", {
+          params: { path: { public_id: id } },
+        }),
+      ),
+    onSettled: (_data, _error, id) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: keys.watch(id) }),
+        queryClient.invalidateQueries({ queryKey: keys.notifications }),
+      ]),
+    // 詳情頁自己顯示結果，不跳全域提示
+    meta: { silent: true },
+  });
+}
+
+/** 這筆追蹤最新一次立即查價的狀態；沒有發過就是 undefined。 */
+export function useCheckState(id: string): MutationState<InstantCheck> | undefined {
+  return useMutationState({
+    filters: {
+      mutationKey: CHECK_MUTATION_KEY,
+      predicate: (mutation) => mutation.state.variables === id,
+    },
+    select: (mutation) => mutation.state as MutationState<InstantCheck>,
+  }).at(-1);
 }
 
 export function usePrices(id: string, range: PriceRange) {
