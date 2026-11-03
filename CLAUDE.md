@@ -6,7 +6,8 @@
 ## 目前狀態
 - **M1 MVP** 進行中：拆成 7 個子專案，spec／plan 在 `docs/superpowers/`；backend 在 `backend/`，`frontend/` 是前端，`experiments/m0/` 是 M0 的實驗腳本
   - #1～#6、目標價參考價、#7a（Lambda handler）已合併
-  - **#7b**（分支 `feat/m1-terraform`）：SES 寄信器、`infra/terraform/`、`infra/scripts/`、`docs/deploy-runbook.md` 已完成並通過部署前審查（PR #12）；手動部署進行中（修正在分支 `fix/m1-deploy`）：AWS 資源（Terraform 46 個）、SSM、SES 網域、Neon migration 與初始資料都已完成，API 已上線；**下一步是 runbook 3.6 部署前端，再做第 4 節驗收**
+  - **#7b**（分支 `feat/m1-terraform`）：SES 寄信器、`infra/terraform/`、`infra/scripts/`、`docs/deploy-runbook.md` 已完成並通過部署前審查（PR #12）；手動部署進行中（修正在分支 `fix/m1-deploy`）：AWS 資源（Terraform 46 個）、SSM、SES 網域、Neon migration 與初始資料、前端都已完成，網站已上線；runbook 第 4 節的指令項目與手動查價已通過，**剩瀏覽器與收信確認、申請解除 SES 沙盒**
+  - **立即查價**（下一個功能）：建立追蹤或修改條件時立刻查價一次，每人每天最多 3 次；設計已確認，待 `fix/m1-deploy` 合併後寫 spec
   - #7c（GitHub Actions 自動部署）尚未開始
 - 正式環境：`https://hao007186.com`，AWS ap-southeast-2（帳號只開放雪梨），部署步驟見 `docs/deploy-runbook.md`
 - 架構文件是草稿第 3 版：`docs/architecture.md` 是總覽，`docs/01-requirements.md` ~ `docs/06-operations.md` 是 SDLC 6 個階段
