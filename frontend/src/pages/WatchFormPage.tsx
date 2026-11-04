@@ -43,6 +43,8 @@ import {
 
 const QUEUED_HINT = "目前全站名額已滿，有空位時會自動開始查價";
 const RESET_CONFIRM = "通知狀態會重置，之後的降價會重新判斷。確定要儲存嗎？";
+const TARGET_CONFIRM =
+  "通知狀態會重置。如果最近 24 小時內的最新價格已達新目標價，會立刻通知你；否則等下次查價再判斷。確定要儲存嗎？";
 const CHECK_CONFIRM =
   "修改查價條件後會立即查價一次，最多消耗今天 3 次中的 1 次；次數用完時會等明天 08:00 查價。通知狀態也會重置，之後的降價會重新判斷。確定要儲存嗎？";
 
@@ -253,9 +255,11 @@ function WatchForm({ original }: { original?: Watch }) {
         const warning =
           shouldCheck && original.status !== "paused"
             ? CHECK_CONFIRM
-            : resetsAlertState(body)
-              ? RESET_CONFIRM
-              : null;
+            : !resetsAlertState(body)
+              ? null
+              : original.status === "active"
+                ? TARGET_CONFIRM
+                : RESET_CONFIRM;
         if (warning && !window.confirm(warning)) return;
         saved = await update.mutateAsync(body);
       } else {

@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clock import get_today
 from app.db.session import get_session
 from app.modules.auth.deps import CurrentUser, WritableUser
+from app.modules.notifications.notifier import send_after_request
+from app.modules.prices.deps import SenderDep, SettingsDep
 from app.modules.watches import service
 from app.modules.watches.models import WatchStatus
 from app.modules.watches.schemas import WatchCreate, WatchOut, WatchUpdate
@@ -75,13 +77,19 @@ async def update_watch(
     body: WatchUpdate,
     user: WritableUser,
     session: SessionDep,
+    sender: SenderDep,
+    settings: SettingsDep,
     today: TodayDep,
 ) -> WatchOut:
     try:
-        watch = await service.update_watch(session, user, public_id, body, today)
+        watch, alerted = await service.update_watch(session, user, public_id, body, today)
     except _ERRORS as e:
         raise _http_error(e) from None
-    return WatchOut.from_watch(watch)
+    # 先組好回應：寄信失敗 rollback 後，watch 和 user 都會過期，不能再讀
+    out = WatchOut.from_watch(watch)
+    if alerted:
+        await send_after_request(session, sender, settings.app_base_url)
+    return out
 
 
 @router.delete("/{public_id}", status_code=status.HTTP_204_NO_CONTENT)

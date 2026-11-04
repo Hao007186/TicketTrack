@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select, true
+from sqlalchemy import func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import TAIPEI_TZ
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 5
 MAX_ERROR_LENGTH = 1000
+MAX_EMAILS_PER_REQUEST = 5
 FOOTER = "可在設定頁關閉 Email 通知。"
 
 
@@ -73,7 +74,8 @@ async def send_pending(
                     AlertDelivery,
                     Notification,
                     User.email,
-                    Alert.created_at,
+                    # 快照可能因保留期限被刪除；這時 alert 的建立時間是最接近的時間
+                    func.coalesce(PriceSnapshot.observed_at, Alert.created_at),
                     PriceSnapshot.booking_url,
                 )
                 .join(Alert, Alert.id == AlertDelivery.alert_id)
@@ -120,3 +122,20 @@ async def send_pending(
             delivery.sent_at = now()
             summary.sent += 1
         await session.commit()
+
+
+async def send_after_request(
+    session: AsyncSession,
+    sender: EmailSender,
+    base_url: str,
+    now: Callable[[], datetime] = _utcnow,
+) -> None:
+    """API 請求當下寄信。請求本身已經成功，寄信的任何問題都不能影響結果；沒寄出的信由排程重試。
+
+    失敗時會 rollback，呼叫端之後要用到的 ORM 物件要重新讀取。
+    """
+    try:
+        await send_pending(session, sender, base_url, now, limit=MAX_EMAILS_PER_REQUEST)
+    except Exception:
+        await session.rollback()
+        logger.exception("API 請求當下寄信失敗")

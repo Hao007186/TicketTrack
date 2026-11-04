@@ -257,6 +257,84 @@ async def test_email_failure_keeps_result(db_session: AsyncSession) -> None:
     assert await _used(db_session, user_id) == 1
 
 
+async def _add_snapshot(
+    session: AsyncSession, watch: Watch, age: timedelta = timedelta(hours=1)
+) -> None:
+    session.add(
+        PriceSnapshot(
+            price_query_id=watch.price_query_id,
+            provider="fake",
+            price=9000,
+            stops=0,
+            observed_at=NOW - age,
+        )
+    )
+    await session.flush()
+
+
+async def test_already_checked_notifies_from_recent_price(db_session: AsyncSession) -> None:
+    """表單查過再建立追蹤：不用再查，也不用等到隔天才通知。"""
+    user, watch = await _setup(db_session, target_price=9500)
+    await _set_checked(db_session, watch.price_query_id, NOW - timedelta(hours=1))
+    await _add_snapshot(db_session, watch)
+    provider = FakeProvider()
+    sender = FakeSender()
+
+    assert await _check(db_session, watch, provider, sender) == "already_checked"
+
+    assert provider.calls == []
+    assert await _used(db_session, user.id) == 0
+    assert await db_session.scalar(select(func.count()).select_from(Notification)) == 1
+    assert [m.to for m in sender.attempts] == ["alice@example.com"]
+
+
+async def test_already_checked_above_target_does_not_notify(db_session: AsyncSession) -> None:
+    _, watch = await _setup(db_session, target_price=8000)
+    await _set_checked(db_session, watch.price_query_id, NOW - timedelta(hours=1))
+    await _add_snapshot(db_session, watch)
+    sender = FakeSender()
+
+    assert await _check(db_session, watch, FakeProvider(), sender) == "already_checked"
+
+    assert await db_session.scalar(select(func.count()).select_from(Notification)) == 0
+    assert sender.attempts == []
+
+
+async def test_already_checked_with_stale_price_does_not_notify(db_session: AsyncSession) -> None:
+    _, watch = await _setup(db_session, target_price=9500)
+    await _set_checked(db_session, watch.price_query_id, NOW - timedelta(hours=1))
+    await _add_snapshot(db_session, watch, age=timedelta(hours=25))
+
+    assert await _check(db_session, watch, FakeProvider()) == "already_checked"
+
+    assert await db_session.scalar(select(func.count()).select_from(Notification)) == 0
+
+
+async def test_repeated_check_only_notifies_once(db_session: AsyncSession) -> None:
+    _, watch = await _setup(db_session, target_price=9500)
+    sender = FakeSender()
+    assert await _check(db_session, watch, FakeProvider(), sender) == "checked"
+
+    assert await _check(db_session, watch, FakeProvider(), sender) == "already_checked"
+
+    assert await db_session.scalar(select(func.count()).select_from(Notification)) == 1
+    assert len(sender.attempts) == 1
+
+
+async def test_already_checked_email_failure_keeps_result(db_session: AsyncSession) -> None:
+    class BrokenSender(FakeSender):
+        async def send(self, message: EmailMessage) -> None:
+            raise RuntimeError("SES 權限不足")
+
+    _, watch = await _setup(db_session, target_price=9500)
+    await _set_checked(db_session, watch.price_query_id, NOW - timedelta(hours=1))
+    await _add_snapshot(db_session, watch)
+
+    assert await _check(db_session, watch, FakeProvider(), BrokenSender()) == "already_checked"
+
+    assert await db_session.scalar(select(func.count()).select_from(Notification)) == 1
+
+
 async def test_check_query_without_watch(db_session: AsyncSession) -> None:
     """表單查價還沒有追蹤，只有 query。"""
     user, watch = await _setup(db_session, status="paused")

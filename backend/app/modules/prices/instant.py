@@ -10,8 +10,9 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.alerts.service import alert_on_recent_price
 from app.modules.notifications.email import EmailSender
-from app.modules.notifications.notifier import send_pending
+from app.modules.notifications.notifier import send_after_request
 from app.modules.notifications.service import notify_quota_exhausted
 from app.modules.prices.budget import daily_budget
 from app.modules.prices.checker import (
@@ -35,7 +36,6 @@ MAX_INSTANT_CHECKS_PER_DAY = 3
 INSTANT_LOCK_KEY = 0x46415246
 # 查額度與查價合計；API Lambda 上限 30 秒，要留時間給記錄結果與寄信
 INSTANT_TIMEOUT_SECONDS: float = 15
-MAX_EMAILS_PER_CHECK = 5
 
 
 def _utcnow() -> datetime:
@@ -147,13 +147,7 @@ async def check_query(
 
     await record_result(session, query, provider.name, result, now())
     outcome: InstantResult = "no_result" if result.lowest is None else "checked"
-
-    # 查價已經成功，寄信的任何問題都不能影響結果；沒寄出的信由排程重試
-    try:
-        await send_pending(session, sender, base_url, now, limit=MAX_EMAILS_PER_CHECK)
-    except Exception:
-        await session.rollback()
-        logger.exception("立即查價後寄信失敗（query %s）", query_id)
+    await send_after_request(session, sender, base_url, now)
     return outcome
 
 
@@ -169,4 +163,11 @@ async def check_watch(
     query = watch.price_query
     if watch.status != "active" or query.depart_date <= today + timedelta(days=STOP_CHECK_DAYS):
         return "not_eligible"
-    return await check_query(session, provider, sender, base_url, watch.user_id, query, today, now)
+    result = await check_query(
+        session, provider, sender, base_url, watch.user_id, query, today, now
+    )
+    # 這組條件今天查過（例如表單查過才建立追蹤）：查價時這個追蹤還不存在或條件不同，沒被判斷到
+    if result == "already_checked" and await alert_on_recent_price(session, watch, now()):
+        await session.commit()
+        await send_after_request(session, sender, base_url, now)
+    return result
