@@ -1,14 +1,14 @@
 """追蹤的操作流程。每個寫入操作：拿全站鎖 → 改資料 → 補位 → commit 一次。"""
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.alerts.service import reset_state
+from app.modules.alerts.service import alert_on_recent_price, reset_state
 from app.modules.reference.models import ORIGIN_COUNTRY, Airline, Airport
 from app.modules.users.models import User
 from app.modules.watches import slots
@@ -152,9 +152,19 @@ def _merged_conditions(old: QueryConditions, data: WatchUpdate) -> QueryConditio
     return replace(old, **changes)  # type: ignore[arg-type]
 
 
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
 async def update_watch(
-    session: AsyncSession, user: User, public_id: uuid.UUID, data: WatchUpdate, today: date
-) -> Watch:
+    session: AsyncSession,
+    user: User,
+    public_id: uuid.UUID,
+    data: WatchUpdate,
+    today: date,
+    now: Callable[[], datetime] = _utcnow,
+) -> tuple[Watch, bool]:
+    """回傳（追蹤、是否產生了要通知的 alert）。"""
     await slots.acquire_watch_lock(session)
     await _catch_up(session, today)
     watch = await get_watch(session, user, public_id)
@@ -190,8 +200,10 @@ async def update_watch(
 
     await session.flush()
     await slots.rebalance(session, today)
+    # 改了條件的話價格要重查，由前端接著發的立即查價處理
+    alerted = target_changed and new == old and await alert_on_recent_price(session, watch, now())
     await session.commit()
-    return await get_watch(session, user, public_id)
+    return await get_watch(session, user, public_id), alerted
 
 
 async def delete_watch(

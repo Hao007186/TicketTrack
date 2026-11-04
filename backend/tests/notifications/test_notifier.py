@@ -115,6 +115,27 @@ async def test_email_shows_check_time(db_session: AsyncSession) -> None:
     assert "查價時間：2026-11-01 10:00（台灣時間）" in sender.attempts[0].text
 
 
+async def test_email_check_time_is_when_price_was_observed(db_session: AsyncSession) -> None:
+    # 改目標價時才通知，用的是稍早查到的價格；信上要寫查價的時間，不是通知的時間
+    user = await create_user(db_session)
+    watch = await insert_watch(db_session, user, target_price=9500)
+    snapshot = PriceSnapshot(
+        price_query_id=watch.price_query_id,
+        provider="mock",
+        price=9000,
+        stops=0,
+        observed_at=NOW - timedelta(hours=5),
+    )
+    db_session.add(snapshot)
+    await db_session.flush()
+    await create_alert(db_session, watch, snapshot.id, 9000, DECISION, created_at=NOW, deliver=True)
+    sender = FakeSender()
+
+    await _send(db_session, sender)
+
+    assert "查價時間：2026-11-01 05:00（台灣時間）" in sender.attempts[0].text
+
+
 async def test_no_booking_line_without_url(db_session: AsyncSession) -> None:
     await _pending(db_session, booking_url=None)
     sender = FakeSender()
