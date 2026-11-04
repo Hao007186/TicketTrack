@@ -166,7 +166,7 @@ const CONDITION_FIELDS: (keyof WatchUpdate)[] = [
 ];
 const RESET_FIELDS: (keyof WatchUpdate)[] = [...CONDITION_FIELDS, "target_price"];
 
-/** 改了查價條件時會立即查價；只改目標價不用。 */
+/** 改了查價條件時會立即查價；只改目標價不用，後端會拿最近的價格判斷。 */
 export function changesConditions(body: WatchUpdate): boolean {
   return CONDITION_FIELDS.some((field) => field in body);
 }

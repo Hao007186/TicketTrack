@@ -88,7 +88,12 @@ export function useUpdateWatch(id: string) {
           body,
         }),
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.watches }),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: keys.watches }),
+        // 改目標價可能當下就產生通知
+        queryClient.invalidateQueries({ queryKey: keys.notifications }),
+      ]),
     meta: { silent: true },
   });
 }

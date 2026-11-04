@@ -316,19 +316,51 @@ describe("立即查價", () => {
     await waitFor(() => expect(checks).toEqual([watch.public_id]));
   });
 
-  it("只改目標價不查價，維持原本的確認文字", async () => {
-    mockCommon();
-    const checks = recordChecks();
-    const watch = editable();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  async function changeTarget(watch: ReturnType<typeof makeWatch>) {
     renderApp(`/watches/${watch.public_id}/edit`);
     const price = await screen.findByLabelText("目標價（TWD）");
     await userEvent.clear(price);
     await userEvent.type(price, "8000");
     await userEvent.click(screen.getByRole("button", { name: "儲存" }));
     await screen.findByRole("button", { name: "編輯" });
-    expect(confirm).toHaveBeenCalledWith("通知狀態會重置，之後的降價會重新判斷。確定要儲存嗎？");
+  }
+
+  it("只改目標價不查價，確認文字說明可能立刻通知", async () => {
+    mockCommon();
+    const checks = recordChecks();
+    const watch = editable();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    await changeTarget(watch);
+    expect(confirm).toHaveBeenCalledWith(
+      "通知狀態會重置。如果最近 24 小時內的最新價格已達新目標價，會立刻通知你；否則等下次查價再判斷。確定要儲存嗎？",
+    );
     expect(checks).toEqual([]);
+  });
+
+  it("暫停中只改目標價不會通知，維持原本的確認文字", async () => {
+    mockCommon();
+    const watch = editable("paused");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    await changeTarget(watch);
+    expect(confirm).toHaveBeenCalledWith("通知狀態會重置，之後的降價會重新判斷。確定要儲存嗎？");
+  });
+
+  it("改目標價後鈴鐺馬上更新", async () => {
+    mockCommon();
+    const watch = editable();
+    let patched = false;
+    server.use(
+      http.patch(`/api/v1/watches/${watch.public_id}`, () => {
+        patched = true;
+        return HttpResponse.json(watch);
+      }),
+      http.get("/api/v1/notifications", () =>
+        HttpResponse.json({ items: [], unread_count: patched ? 1 : 0 }),
+      ),
+    );
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await changeTarget(watch);
+    expect(await screen.findByRole("link", { name: "通知（1 則未讀）" })).toBeInTheDocument();
   });
 
   it("暫停中改條件不警告額度，也不查價", async () => {
