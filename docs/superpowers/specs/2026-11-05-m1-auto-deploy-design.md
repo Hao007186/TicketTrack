@@ -12,7 +12,7 @@
 **完成標準：**
 - 合併只改後端的 PR：自動跑 migration、更新 `farewatch-api` 與 `farewatch-jobs`，前端不動
 - 合併只改前端的 PR：自動更新 S3 與 CloudFront，不建新 image
-- 合併只改文件的 PR：不部署
+- 合併只改文件的 PR：不部署（除非上一次部署失敗，那次沒上線的變更會一起部署）
 - 部署完成後，首頁、`/api/v1/health`、`/api/v1/airports` 都回 200
 - PR（含 fork 來的 PR）的執行紀錄拿不到部署機密
 - 手動 `terraform plan` 不會想把 Lambda 的 image 改回去
@@ -46,7 +46,7 @@
 
 ```text
 main 上的 CI 成功（workflow_run）
-  └─ 判斷變更（這次 commit 和前一個 commit 比較）
+  └─ 判斷變更（這次 commit 和「上一次部署成功的 commit」比較）
        ├─ backend/** 有變更 → backend job
        │    建 arm64 image → 推 ECR（tag 是 git short SHA；已存在就跳過）
        │    → alembic upgrade head → 更新 2 個 Lambda 並等待更新完成
@@ -57,7 +57,8 @@ main 上的 CI 成功（workflow_run）
 ```
 
 - `.github/workflows/deploy.yml` 本身有變更但程式沒變時，不部署
-- 比較對象是 commit 的第一個 parent，也就是合併前的 `main`，所以一個 PR 有多個 commit 也能看到完整變更
+- **比較對象是上一次部署成功的 commit**，不是前一個 commit。否則部署失敗後，下一個只改文件的 PR 會讓沒上線的變更被漏掉；GitHub 的排隊也只保留最新一個等待中的部署，連續合併時中間那次會被取消。沒有成功紀錄時（第一次）全部部署；這次的 commit 比上次成功的還舊時不部署
+- 成功部署的 commit 記在執行名稱（`run-name`），因為 `workflow_run` 執行紀錄上的 commit 是觸發當下的 `main`，不一定是實際部署的那個
 - backend job 因為沒有後端變更而跳過時，frontend job 仍要執行；只有 backend job 失敗才不跑
 - **排隊**：`concurrency` 讓部署一次跑一個，後來的等待，不取消進行中的部署（中途取消可能留下做一半的 migration）
 - **image 重複**：ECR 的 tag 不能覆蓋，所以重跑同一個 commit 時要先檢查 tag，已存在就跳過推送，才能重跑失敗的部署
@@ -98,7 +99,8 @@ main 上的 CI 成功（workflow_run）
 - 機密放在 `production` Environment，部署分支限定 `main`：`AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`DATABASE_URL`
 - 不是機密的設定（ECR 網址、bucket、distribution ID）放 Environment variables
 - `ci.yml` 不接觸這個 Environment，所以 PR 拿不到機密
-- 部署流程用的第三方 Action 鎖定到 commit SHA；`permissions` 只給 `contents: read`
+- 部署流程用的第三方 Action 鎖定到 commit SHA；`permissions` 只給 `contents: read` 和 `actions: read`（查上一次成功的部署）
+- `workflow_run` 只接受來自本 repo、`push` 事件、分支 `main` 且成功的 CI，避免 fork 把分支取名 `main` 來觸發部署
 - repo 是公開的：不要在 log 印出機密；`DATABASE_URL` 只放在 migration 這一步的環境變數
 
 ## Terraform 調整
