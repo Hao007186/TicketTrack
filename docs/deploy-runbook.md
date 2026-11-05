@@ -130,7 +130,7 @@ cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars
 2. 等第 3 節部署完、網域驗證通過後：SES → **Account dashboard** → Request production access
    - Mail type：Transactional
    - Website URL：`https://hao007186.com`
-   - Use case：說明是機票降價通知網站、只寄給自己註冊的使用者、每天少量、有退信處理
+   - Use case：說明是機票降價通知網站、只寄給自己註冊的使用者、每天少量、已啟用 SES 抑制清單（退信或投訴過的地址不再寄）、有退信率與投訴率告警
    審核約 1 天。通過前只能寄給第 1 步驗證過的信箱。
 
 ### 2.9 確認 Cloudflare 上沒有會衝突的舊記錄
