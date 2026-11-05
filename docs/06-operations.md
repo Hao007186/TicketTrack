@@ -9,7 +9,8 @@
 | 查價是否有在跑 | 超過 25 小時沒有成功執行 |
 | jobs Lambda 執行失敗 | Errors > 0（查價拿不到額度、重寄或維護出錯） |
 | SerpApi／LINE 額度 | 用量 > 80% |
-| 通知信寄送失敗 | `alert_deliveries` 出現 `failed`；另外定期看 SES 主控台的退信率與投訴率（太高會被暫停寄信） |
+| 通知信寄送失敗 | `alert_deliveries` 出現 `failed` |
+| SES 信譽 | 退信率 ≥ 5% 或投訴率 ≥ 0.1%（AWS 開始審查帳號的門檻，太高會被暫停寄信） |
 | AWS 費用 | > US$1 |
 - 結構化日誌（JSON，帶 request_id、watch_id），用 CloudWatch Logs Insights 查詢
 - `/health` 健康檢查端點；Admin 頁面顯示額度、查價覆蓋率（每個 query 距離上次查價幾天）和通知成功率

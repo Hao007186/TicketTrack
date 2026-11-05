@@ -56,6 +56,36 @@ resource "aws_cloudwatch_metric_alarm" "jobs_not_running" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 }
 
+# SES 信譽：AWS 在退信率 5%、投訴率 0.1% 開始審查帳號（再高可能暫停寄信），到審查線就先通知
+# 指標是帳號層級，沒有 dimensions；寄信量低時可能很久才有一筆，沒資料不算異常
+resource "aws_cloudwatch_metric_alarm" "ses_bounce_rate" {
+  alarm_name          = "${local.name}-ses-bounce-rate"
+  alarm_description   = "SES 退信率達 5%，AWS 可能審查帳號；見 docs/06-operations.md"
+  namespace           = "AWS/SES"
+  metric_name         = "Reputation.BounceRate"
+  statistic           = "Maximum"
+  period              = 3600
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 0.05
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "ses_complaint_rate" {
+  alarm_name          = "${local.name}-ses-complaint-rate"
+  alarm_description   = "SES 投訴率達 0.1%，AWS 可能審查帳號；見 docs/06-operations.md"
+  namespace           = "AWS/SES"
+  metric_name         = "Reputation.ComplaintRate"
+  statistic           = "Maximum"
+  period              = 3600
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 0.001
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+}
+
 # 每月實際費用超過 US$1 就寄信
 resource "aws_budgets_budget" "monthly" {
   name         = "${local.name}-monthly"
