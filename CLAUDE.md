@@ -6,7 +6,7 @@
 ## 目前狀態
 - **M1 MVP** 進行中：拆成 7 個子專案，spec／plan 在 `docs/superpowers/`；backend 在 `backend/`，`frontend/` 是前端，`experiments/m0/` 是 M0 的實驗腳本
   - #1～#6、目標價參考價、#7a（Lambda handler）已合併
-  - **#7b**（分支 `feat/m1-terraform`）：SES 寄信器、`infra/terraform/`、`infra/scripts/`、`docs/deploy-runbook.md` 已完成並通過部署前審查（PR #12）；手動部署已完成（修正已合併）：AWS 資源（Terraform 46 個）、SSM、SES 網域、Neon migration 與初始資料、前端都已上線；runbook 第 4 節的驗收已通過，**只剩申請解除 SES 沙盒**
+  - **#7b**（分支 `feat/m1-terraform`）：SES 寄信器、`infra/terraform/`、`infra/scripts/`、`docs/deploy-runbook.md` 已完成並通過部署前審查（PR #12）；手動部署與 runbook 第 4 節驗收已全部完成（修正已合併）：AWS 資源、SSM、SES 網域、Neon migration 與初始資料、前端都已上線；SES 已解除沙盒（2026-11-05），未驗證信箱實寄通過；退信率與投訴率告警已部署（PR #19）
   - **立即查價**：建立追蹤或修改條件時立刻查價、表單可查目前價格並用典型低價填目標價，每人每天最多 3 次；spec／plan 在 `docs/superpowers/`；已合併（PR #15）並部署（`41bc195`），2026-11-05 線上實測通過
   - **改目標價即時判斷**：只改目標價，或這組條件今天已查過時，拿最近 24 小時內的最新價格比目標價，達標就當下通知，不花額度；已合併（PR #16）並部署（`41bc195`），2026-11-05 線上實測通過
   - #7c（GitHub Actions 自動部署）尚未開始
