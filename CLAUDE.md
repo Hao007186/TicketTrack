@@ -6,9 +6,9 @@
 ## 目前狀態
 - **M1 MVP** 進行中：拆成 7 個子專案，spec／plan 在 `docs/superpowers/`；backend 在 `backend/`，`frontend/` 是前端，`experiments/m0/` 是 M0 的實驗腳本
   - #1～#6、目標價參考價、#7a（Lambda handler）已合併
-  - **#7b**（分支 `feat/m1-terraform`）：SES 寄信器、`infra/terraform/`、`infra/scripts/`、`docs/deploy-runbook.md` 已完成並通過部署前審查（PR #12）；手動部署進行中（修正在分支 `fix/m1-deploy`）：AWS 資源（Terraform 46 個）、SSM、SES 網域、Neon migration 與初始資料、前端都已完成，網站已上線；runbook 第 4 節的指令項目與手動查價已通過，**剩確認「歷史紀錄」分頁、申請解除 SES 沙盒**
-  - **立即查價**：建立追蹤或修改條件時立刻查價、表單可查目前價格並用典型低價填目標價，每人每天最多 3 次；spec／plan 在 `docs/superpowers/`；已合併（PR #15）並部署（`41bc195`），**線上實測還沒做**（實測要先問）
-  - **改目標價即時判斷**：只改目標價，或這組條件今天已查過時，拿最近 24 小時內的最新價格比目標價，達標就當下通知，不花額度；已合併（PR #16）並部署（`41bc195`），**線上實測還沒做**，和立即查價一起測，約花 2 次額度
+  - **#7b**（分支 `feat/m1-terraform`）：SES 寄信器、`infra/terraform/`、`infra/scripts/`、`docs/deploy-runbook.md` 已完成並通過部署前審查（PR #12）；手動部署已完成（修正已合併）：AWS 資源（Terraform 46 個）、SSM、SES 網域、Neon migration 與初始資料、前端都已上線；runbook 第 4 節的驗收已通過，**只剩申請解除 SES 沙盒**
+  - **立即查價**：建立追蹤或修改條件時立刻查價、表單可查目前價格並用典型低價填目標價，每人每天最多 3 次；spec／plan 在 `docs/superpowers/`；已合併（PR #15）並部署（`41bc195`），2026-11-05 線上實測通過
+  - **改目標價即時判斷**：只改目標價，或這組條件今天已查過時，拿最近 24 小時內的最新價格比目標價，達標就當下通知，不花額度；已合併（PR #16）並部署（`41bc195`），2026-11-05 線上實測通過
   - #7c（GitHub Actions 自動部署）尚未開始
 - 正式環境：`https://hao007186.com`，AWS ap-southeast-2（帳號只開放雪梨），部署步驟見 `docs/deploy-runbook.md`
 - 架構文件是草稿第 3 版：`docs/architecture.md` 是總覽，`docs/01-requirements.md` ~ `docs/06-operations.md` 是 SDLC 6 個階段
