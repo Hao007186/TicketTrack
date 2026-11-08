@@ -93,6 +93,11 @@ resource "aws_lambda_function" "api" {
   }
 
   depends_on = [aws_cloudwatch_log_group.lambda, aws_iam_role_policy_attachment.basic]
+
+  # image 由自動部署（infra/scripts/deploy-lambdas.sh）更新，Terraform 只在建立時用 image_tag
+  lifecycle {
+    ignore_changes = [image_uri]
+  }
 }
 
 resource "aws_lambda_function" "jobs" {
@@ -114,6 +119,11 @@ resource "aws_lambda_function" "jobs" {
   }
 
   depends_on = [aws_cloudwatch_log_group.lambda, aws_iam_role_policy_attachment.basic]
+
+  # image 由自動部署（infra/scripts/deploy-lambdas.sh）更新，Terraform 只在建立時用 image_tag
+  lifecycle {
+    ignore_changes = [image_uri]
+  }
 }
 
 # 公開網址；只接受 CloudFront 帶著 X-Origin-Verify 的請求（app 的 middleware 檢查）
