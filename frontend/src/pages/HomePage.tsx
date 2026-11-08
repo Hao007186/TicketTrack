@@ -56,6 +56,7 @@ export function HomePage() {
         <p className="mx-auto mt-4 max-w-xl text-slate-600">
           FareWatch 每天幫你查台灣出發的機票價格，符合條件時立刻通知你。
         </p>
+        <p className="mt-2 text-sm text-slate-500">價格每天早上 8 點更新</p>
         <div className="mt-8 flex flex-col items-center gap-2">
           <button
             type="button"
