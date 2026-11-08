@@ -42,7 +42,8 @@ EOF
 cat >"$bin/docker" <<'EOF'
 #!/usr/bin/env bash
 echo "docker $*" >>"$CALLS"
-cat >/dev/null || true
+# 只有 login 會從 stdin 讀密碼；其他指令讀 stdin 會在終端機上卡住
+if [[ "$1" == login ]]; then cat >/dev/null; fi
 EOF
 cat >"$bin/terraform" <<'EOF'
 #!/usr/bin/env bash
