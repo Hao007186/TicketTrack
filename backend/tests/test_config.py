@@ -75,6 +75,16 @@ def test_serpapi_requires_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "secret-serpapi-key" not in repr(s)
 
 
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_serpapi_rejects_blank_key(monkeypatch: pytest.MonkeyPatch, blank: str) -> None:
+    # 空字串的 key 會讓每次查價都被 SerpApi 拒絕，要在啟動時就擋下
+    monkeypatch.setenv("DATABASE_URL", URL)
+    monkeypatch.setenv("PRICE_PROVIDER", "serpapi")
+    monkeypatch.setenv("SERPAPI_KEY", blank)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
 def test_email_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", URL)
     for name in ("EMAIL_SENDER", "SMTP_PORT", "APP_BASE_URL"):

@@ -48,7 +48,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _serpapi_needs_key(self) -> Self:
-        if self.price_provider == "serpapi" and self.serpapi_key is None:
+        key = self.serpapi_key
+        # 空字串或只有空白也算沒設定：SerpApi 會拒絕每一次查價
+        if self.price_provider == "serpapi" and (key is None or not key.get_secret_value().strip()):
             raise ValueError("PRICE_PROVIDER=serpapi 時必須設定 SERPAPI_KEY")
         return self
 
