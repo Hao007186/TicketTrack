@@ -122,7 +122,7 @@ MSYS_NO_PATHCONV=1 aws ssm get-parameters-by-path --path /farewatch/prod/ --quer
 ```bash
 cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars
 ```
-用編輯器打開 `infra/terraform/terraform.tfvars`，填入告警信箱、Cloudflare token 與 Zone ID。`image_tag` 部署時用 `-var` 傳入，這裡隨便填即可。這個檔案已在 `.gitignore`，不會進 git。
+用編輯器打開 `infra/terraform/terraform.tfvars`，填入告警信箱、Cloudflare token 與 Zone ID。`image_tag` 不用填：只有第 3 節從零建立時用 `-var` 傳入，之後 image 由自動部署更新，Terraform 不再管。這個檔案已在 `.gitignore`，不會進 git。
 
 ### 2.8 SES：驗證自己的信箱、申請解除沙盒
 新帳號的 SES 在「沙盒」裡，只能寄給驗證過的信箱。
@@ -223,14 +223,76 @@ TAG=$(git rev-parse --short HEAD)
 - [ ] SNS 訂閱已確認；Billing → Budgets 看得到 `farewatch-monthly`
 - [ ] 有問題時看 log：`MSYS_NO_PATHCONV=1 aws logs tail /aws/lambda/farewatch-api --since 10m`（jobs 換成 `farewatch-jobs`）
 
-## 5. 之後的更新
+## 5. 設定自動部署
+設定好之後，PR 合併進 `main`、CI 通過，GitHub Actions 的 **Deploy** 工作流程（`.github/workflows/deploy.yml`）就會自動部署：
+
+- 比對「上一次部署成功的 commit」和這次的 commit：`backend/` 有變更就建 image、跑 migration、更新 2 個 Lambda；`frontend/` 有變更就部署前端；都沒有就不部署
+- 部署完跑冒煙測試：首頁、`/api/v1/health`、`/api/v1/airports` 都要回 200
+- 一次只跑一個部署，後來的排隊等待
+
+帳號的 SCP 不允許 GitHub OIDC，所以用專用 IAM 使用者 `farewatch-deploy` 的存取金鑰。這個使用者由 Terraform 建立，權限只夠推 image、更新 2 個 Lambda、上傳前端、清 CloudFront 快取；**金鑰**由你在主控台建立（用 Terraform 建的話，金鑰會存進 state）。
+
+1. **建立 `farewatch-deploy` 使用者**（只有第一次）
+   ```bash
+   cd infra/terraform
+   terraform plan -out tfplan
+   ```
+   確認 plan 只有新增 `aws_iam_user.deploy` 與 `aws_iam_user_policy.deploy`，**Lambda 沒有變更**，再執行：
+   ```bash
+   terraform apply tfplan
+   rm "$PWD/tfplan"
+   cd ../..
+   ```
+2. **建立存取金鑰**：主控台 → IAM → Users → `farewatch-deploy` → Security credentials → Access keys → **Create access key** → 用途選 **Third-party service**（或 Application running outside AWS）→ 複製 Access key ID 與 Secret access key（Secret 只顯示一次，不要貼進聊天、不要存在電腦上）
+3. **建立 GitHub Environment**：GitHub repo → Settings → Environments → New environment，名稱 `production`
+   - Deployment branches and tags：選 **Selected branches and tags** → 加入 `main`（其他分支拿不到下面的機密）
+   - Environment secrets：
+
+     | 名稱 | 值 |
+     |---|---|
+     | `AWS_ACCESS_KEY_ID` | 第 2 步的 Access key ID |
+     | `AWS_SECRET_ACCESS_KEY` | 第 2 步的 Secret access key |
+     | `DATABASE_URL` | Neon 的**直連**網址（和第 3 節第 5 步相同，migration 用） |
+   - Environment variables（不是機密，從 Terraform output 取得）：
+     ```bash
+     terraform -chdir=infra/terraform output -raw ecr_repository_url        # → ECR_REPO
+     terraform -chdir=infra/terraform output -raw frontend_bucket           # → FRONTEND_BUCKET
+     terraform -chdir=infra/terraform output -raw cloudfront_distribution_id  # → CLOUDFRONT_DISTRIBUTION_ID
+     ```
+4. **確認金鑰權限**：在新開的 Git Bash 用部署金鑰執行（不要 `export AWS_PROFILE`，金鑰只存在這個終端機，關掉就消失）：
+   ```bash
+   read -rs AWS_ACCESS_KEY_ID && export AWS_ACCESS_KEY_ID
+   read -rs AWS_SECRET_ACCESS_KEY && export AWS_SECRET_ACCESS_KEY
+   export AWS_REGION=ap-southeast-2
+   aws sts get-caller-identity --query Arn   # 應該是 user/farewatch-deploy
+   # 範圍內：只驗證權限，不會真的更新
+   IMAGE=$(aws lambda get-function --function-name farewatch-api --query Code.ImageUri --output text)
+   aws lambda update-function-code --dry-run --function-name farewatch-api --image-uri "$IMAGE"
+   # 範圍外：應該出現 AccessDenied
+   aws iam list-users
+   ```
+   做完關掉這個終端機。
+5. **確認會收到失敗通知**：GitHub 右上角頭像 → Settings → Notifications → **Actions**，勾選 Email 與「Only notify for failed workflows」
+6. **第一次自動部署**：還沒有成功紀錄，所以不管改了什麼，後端和前端都會部署一次
+
+**在 GitHub 上看部署**：repo → Actions → Deploy。每次執行的名稱是 `Deploy <commit>`；CI 失敗或不符合條件（例如 fork 送來的 PR）的執行叫 `Skip <commit>`，不會部署。失敗時線上維持原本的版本（見 [階段 5〈回滾策略〉](05-deployment.md#回滾策略)），修好後合併新的 PR，或在執行頁按 **Re-run failed jobs**（image 已推過時會跳過，不會失敗）。
+
+**部署金鑰外洩**（出現在 log、Git、或發現不明的部署）：
+1. 主控台 → IAM → `farewatch-deploy` → Security credentials → 把金鑰 **Deactivate**（立即失效）
+2. 金鑰能部署任意程式到 Lambda，而 Lambda 讀得到機密，所以要當成機密也外洩：更換 SSM 的 JWT 密鑰、SerpApi key（見第 6 節「更換機密」），並到 Neon 重設資料庫密碼（SSM 的連線字串與 GitHub 的 `DATABASE_URL` 都要更新）
+3. 用 `farewatch-admin` 把 Lambda 換回確定沒問題的版本：`infra/scripts/deploy-lambdas.sh <tag>`
+4. 建新金鑰，更新 GitHub 的 `AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`，再 Delete 舊金鑰
+
+## 6. 之後的更新
+平常合併 PR 就會自動部署（第 5 節）。下面的手動做法是自動部署壞掉時的備用，用 `farewatch-admin`（`export AWS_PROFILE=farewatch`）執行：
+
 - **更新後端**：
   ```bash
   TAG=$(git rev-parse --short HEAD)
-  infra/scripts/push-image.sh "$TAG"
-  terraform -chdir=infra/terraform apply -var image_tag="$TAG"
+  infra/scripts/push-image.sh "$TAG"      # 這個 tag 已經在 ECR 時會直接跳過
+  infra/scripts/deploy-lambdas.sh "$TAG"  # 更新 2 個 Lambda 並等待完成
   ```
-  ECR 的 tag 不能重複；同一個 commit 不能推兩次。
+  有新的 migration 時，要在 `deploy-lambdas.sh` **之前**跑 migration。
 - **更新前端**：`infra/scripts/deploy-frontend.sh`（舊的 JS／CSS 不刪，讓還開著舊頁面的人不會出錯；`index.html` 設成每次重新確認）
 - **有新的 migration**：照第 3 節第 5 步，只跑 `alembic upgrade head`。migration 一律向後相容，先跑 migration 再更新後端
 - **更換機密**：`MSYS_NO_PATHCONV=1 aws ssm put-parameter --name /farewatch/prod/<名稱> --type SecureString --overwrite --value=...`。Lambda 只在冷啟動時讀 SSM，改完要讓它重新啟動：
@@ -238,10 +300,17 @@ TAG=$(git rev-parse --short HEAD)
   aws lambda update-function-configuration --function-name farewatch-api --description "rotated $(date +%F)"
   ```
   （jobs 同理）
-- **回滾後端**：`terraform -chdir=infra/terraform apply -var image_tag=<上一版的 tag>`（ECR 保留最新 3 個）
+- **回滾後端**：`infra/scripts/deploy-lambdas.sh <上一版的 tag>`。可用的 tag（ECR 只保留最新 3 個）：
+  ```bash
+  aws ecr describe-images --repository-name farewatch-backend \
+    --query "sort_by(imageDetails,&imagePushedAt)[].imageTags[0]" --output text
+  ```
+  只換程式，不會倒回 migration。回滾後下一次合併改到 `backend/` 的 PR 會再部署新版；如果下一個 PR 沒改後端，線上會維持回滾的版本。
+  Terraform 已經不管 Lambda 的 image（`ignore_changes`），所以 `terraform apply -var image_tag=...` 不能用來回滾。
 
-## 6. 拆除
+## 7. 拆除
 1. 清空前端 bucket（含所有版本）：S3 主控台選 `farewatch-frontend-<帳號 ID>` → Empty
 2. 刪除 ECR 裡的 image：ECR 主控台 → `farewatch-backend` → 全選 → Delete
-3. `terraform -chdir=infra/terraform destroy -var image_tag=x`
-4. 手動刪除：SSM 的四個參數（`MSYS_NO_PATHCONV=1 aws ssm delete-parameters --names ...`）、Neon 專案、state bucket、SES 驗證的個人信箱、IAM 使用者 `farewatch-admin`（先刪存取金鑰）
+3. IAM → `farewatch-deploy` → 刪除存取金鑰（有金鑰時 Terraform 刪不掉這個使用者）；GitHub 刪除 `production` Environment
+4. `terraform -chdir=infra/terraform destroy`
+5. 手動刪除：SSM 的四個參數（`MSYS_NO_PATHCONV=1 aws ssm delete-parameters --names ...`）、Neon 專案、state bucket、SES 驗證的個人信箱、IAM 使用者 `farewatch-admin`（先刪存取金鑰）

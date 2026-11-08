@@ -202,6 +202,16 @@ flowchart TB
 | 8 | 區域（2026-10-29 修正，原本是 ap-southeast-1 新加坡） | 全部改到 **ap-southeast-2（雪梨）**，Neon 也改雪梨。帳號有 AWS 端的 SCP，只開放雪梨（加上 us-east-1 的 ACM 與 CloudFront 等全球服務），其他區域一律拒絕，我們改不了 |
 | 8 | state 的鎖 | S3 backend 原生鎖（`use_lockfile`），不需要 DynamoDB |
 
+## 2026-11-05 #7c 決策紀錄
+| # | 問題 | 決定 |
+|---|---|---|
+| 1 | GitHub Actions 怎麼登入 AWS（修正階段 5 的 GitHub OIDC） | 帳號的 SCP 明確拒絕建立 OIDC provider，改用專用 IAM 使用者 `farewatch-deploy` 的存取金鑰，放 GitHub Environment `production`（只限 `main`）。升級付費方案後再評估 OIDC |
+| 2 | 自動部署要不要跑 Terraform | 不跑，Terraform 維持手動。Lambda 的 image 設 `ignore_changes`，由 `deploy-lambdas.sh` 更新 |
+| 3 | 何時部署 | 合併進 `main`、CI 成功後全自動（`workflow_run`），沒有人工核准 |
+| 4 | 部署範圍 | 依變更路徑分開部署後端與前端，和上一次部署成功的 commit 比較（只改前端時建新 image 會擠掉 ECR 裡能回滾的舊版） |
+| 5 | Migration | 部署流程直接跑，Neon 直連網址放 GitHub Environment secret；不做 Neon 分支預演 |
+| 6 | 回滾 | 不自動回滾；手動 `deploy-lambdas.sh <上一版的 tag>`，只換程式不倒回 migration |
+
 ---
 
 ## 驗證方式（文件階段）

@@ -9,7 +9,7 @@
 | k8s-demo | kind + Helm（本機和 CI，M3） |
 | prod | AWS Serverless + Neon + Cloudflare DNS |
 
-（單人專案不另外建 staging；Neon 免費版可以開 branch，給 migration 預演用）
+（單人專案不另外建 staging；合併進 `main` 就是上線的確認點）
 
 ## 一次性手動設定（寫進部署文件）
 完整步驟與指令見 [部署手冊](deploy-runbook.md)。
@@ -22,13 +22,21 @@
 - 建立 Terraform state 用的 S3 bucket（避免雞生蛋問題，不由 Terraform 自己建立）
 
 ## CI/CD
-- `ci.yml`（PR）：lint + 型別檢查 + 單元／整合測試 + 前端 build + docker build + `terraform fmt/validate/plan`
+- `ci.yml`（PR 與 main）：lint + 型別檢查 + 單元／整合測試 + 前端 build + docker build + 部署腳本的 shellcheck 與測試
 - `k8s-e2e.yml`（PR，M3）：建 amd64 image 並 `kind load`（不推 ECR）→ `helm install` → 冒煙測試 + Playwright E2E
-- `deploy.yml`（merge 到 main）：`buildx` 建 arm64 單一架構 image（`--provenance=false`）推上 ECR（tag = git SHA）→ 在 Neon branch 預演 migration → `alembic upgrade head` → `terraform apply` 更新 Lambda → 前端 `s3 sync` + CloudFront invalidation → 部署後冒煙測試
-- AWS 認證用 GitHub OIDC（不存長期金鑰）；Cloudflare API token 存在 GitHub Secrets（權限只限該網域的 DNS）
+- `deploy.yml`（`workflow_run`：`main` 上的 CI 成功後）：和**上一次部署成功的 commit** 比較，依變更路徑分開部署
+  - `backend/` 有變更：在 arm64 runner 建單一架構 image（`--provenance=false`）推上 ECR（tag = commit 前 7 碼，已存在就跳過）→ `alembic upgrade head` → `deploy-lambdas.sh` 更新 2 個 Lambda 並等待完成
+  - `frontend/` 有變更：build → `s3 sync` → CloudFront invalidation（後端部署失敗時不跑）
+  - 有部署任何東西：冒煙測試首頁、`/api/v1/health`、`/api/v1/airports`
+  - 比較上一次成功的部署而不是前一個 commit：部署失敗後，下一個只改文件的 PR 仍會補上沒上線的變更；這次的 commit 比上次成功的還舊時不部署，避免連續合併時蓋回舊版
+  - 一次只跑一個部署，不取消進行中的部署（避免 migration 做一半）
+  - 只接受本 repo 的 `main` 被 push 且 CI 成功；fork 把分支取名 `main` 送 PR 不會觸發
+- **Terraform 不在自動部署裡**：維持手動 `plan`／`apply`。要跑 Terraform，金鑰幾乎等於管理員，Cloudflare token 也要放進 GitHub。Lambda 的 `image_uri` 設成 `ignore_changes`，手動 apply 不會把 image 蓋回舊版
+- **AWS 認證用專用 IAM 使用者 `farewatch-deploy` 的存取金鑰**，放在 GitHub Environment `production`（只限 `main`）。原本規劃 GitHub OIDC，但帳號的 SCP 明確拒絕 `iam:CreateOpenIDConnectProvider`；帳號升級付費方案後再評估。權限只夠推 image、更新 2 個 Lambda、上傳前端、清快取。已知風險：金鑰能部署任意程式到 Lambda，而 Lambda 讀得到機密，外洩時機密也要更換（見[部署手冊](deploy-runbook.md#5-設定自動部署)）
+- 不做：Neon 分支預演 migration（要多保管 Neon API 金鑰）、自動回滾（migration 不一定能倒回去）、部署前人工核准
 
 ## 回滾策略
-- 程式：Lambda 改回上一個 image tag（ECR 保留 3 個版本）→ `terraform apply -var image_tag=<上一版>`
+- 程式：`infra/scripts/deploy-lambdas.sh <上一版的 tag>`（ECR 保留 3 個版本）；只換程式，不會倒回 migration。由人判斷要不要回滾，不自動回滾
 - 資料庫：migration 一律向後相容（先加欄位、再改程式、最後才刪欄位）；資料救援以每週 `pg_dump` 備份為主，Neon 免費版的 point-in-time restore 視窗很短（實作時確認當時的額度），只能救剛發生的誤操作
 - 前端：S3 開啟版本控制，可以還原上一版
 
