@@ -72,6 +72,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: shellcheck infra/scripts/*.sh infra/scripts/tests/*.sh
       - run: bash infra/scripts/tests/test-deploy-scope.sh
+      - run: bash infra/scripts/tests/test-deploy-lambdas.sh
 
   docker-build:
     runs-on: ubuntu-latest
