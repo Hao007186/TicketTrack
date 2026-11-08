@@ -65,6 +65,15 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # 自動部署用的腳本：shellcheck 加上各自的測試
+  deploy-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck infra/scripts/*.sh infra/scripts/tests/*.sh
+      - run: bash infra/scripts/tests/test-deploy-scope.sh
+      - run: bash infra/scripts/tests/test-deploy-lambdas.sh
+
   docker-build:
     runs-on: ubuntu-latest
     steps:

@@ -9,7 +9,7 @@
   - **#7b**（分支 `feat/m1-terraform`）：SES 寄信器、`infra/terraform/`、`infra/scripts/`、`docs/deploy-runbook.md` 已完成並通過部署前審查（PR #12）；手動部署與 runbook 第 4 節驗收已全部完成（修正已合併）：AWS 資源、SSM、SES 網域、Neon migration 與初始資料、前端都已上線；SES 已解除沙盒（2026-11-05），未驗證信箱實寄通過；退信率與投訴率告警已部署（PR #19）
   - **立即查價**：建立追蹤或修改條件時立刻查價、表單可查目前價格並用典型低價填目標價，每人每天最多 3 次；spec／plan 在 `docs/superpowers/`；已合併（PR #15）並部署（`41bc195`），2026-11-05 線上實測通過
   - **改目標價即時判斷**：只改目標價，或這組條件今天已查過時，拿最近 24 小時內的最新價格比目標價，達標就當下通知，不花額度；已合併（PR #16）並部署（`41bc195`），2026-11-05 線上實測通過
-  - #7c（GitHub Actions 自動部署）尚未開始
+  - **#7c**（分支 `feat/m1-auto-deploy`，GitHub Actions 自動部署）：spec／plan 在 `docs/superpowers/`；`deploy.yml`、`infra/scripts/` 的部署腳本與測試、Terraform 的部署用使用者、文件已完成；**尚未上線**：要先合併、手動 apply、建金鑰與 GitHub Environment，再合併 `deploy.yml`（步驟見 `docs/deploy-runbook.md` 第 5 節）
 - 正式環境：`https://hao007186.com`，AWS ap-southeast-2（帳號只開放雪梨），部署步驟見 `docs/deploy-runbook.md`
 - 架構文件是草稿第 3 版：`docs/architecture.md` 是總覽，`docs/01-requirements.md` ~ `docs/06-operations.md` 是 SDLC 6 個階段
 

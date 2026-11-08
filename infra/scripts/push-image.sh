@@ -17,6 +17,17 @@ registry="${repo%%/*}"
 # registry 格式：<帳號>.dkr.ecr.<區域>.amazonaws.com，區域跟著 Terraform 走
 region="$(cut -d. -f4 <<<"$registry")"
 
+# ECR 的 tag 不能覆蓋：已經推過（例如重跑同一個 commit 的部署）就跳過
+if out="$(aws ecr describe-images --region "$region" --repository-name "${repo#*/}" \
+  --image-ids "imageTag=$tag" 2>&1)"; then
+  echo "已存在，跳過：$repo:$tag"
+  exit 0
+elif ! grep -q ImageNotFoundException <<<"$out"; then
+  # 權限不足等其他錯誤不能當成 tag 不存在
+  echo "$out" >&2
+  exit 1
+fi
+
 aws ecr get-login-password --region "$region" |
   docker login --username AWS --password-stdin "$registry"
 

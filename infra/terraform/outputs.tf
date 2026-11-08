@@ -18,3 +18,8 @@ output "cloudfront_distribution_id" {
 output "cloudfront_domain" {
   value = aws_cloudfront_distribution.site.domain_name
 }
+
+output "deploy_user_name" {
+  description = "GitHub Actions 自動部署用的 IAM 使用者；存取金鑰在主控台手動建立"
+  value       = aws_iam_user.deploy.name
+}

@@ -5,8 +5,9 @@ variable "domain" {
 }
 
 variable "image_tag" {
-  description = "要部署的 backend image tag（git SHA）"
+  description = "從零建立 Lambda 時用的 backend image tag（git SHA）。之後 image 由自動部署更新，Terraform 不再管，平常不用傳"
   type        = string
+  default     = "bootstrap"
 }
 
 variable "alert_email" {

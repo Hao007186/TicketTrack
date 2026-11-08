@@ -27,7 +27,9 @@
 | 正式環境的部署、更新、回滾、換機密 | 見 [部署手冊](deploy-runbook.md) |
 | 註冊被濫用、價格通知寄到被冒用的信箱（退信率／投訴率告警） | 先暫時關閉註冊；再補上註冊頻率限制或 Cloudflare Turnstile，並對 Lambda 設 reserved concurrency |
 | 外部 API 格式改變 | 契約測試會在 CI 失敗；adapter 記錄錯誤並跳過，不影響其他供應商 |
-| 部署後出錯 | 依[階段 5〈回滾策略〉](05-deployment.md#回滾策略)回滾 |
+| 自動部署失敗（GitHub 寄失敗通知信） | 到 repo → Actions → Deploy 看哪一步失敗。建 image 或 migration 失敗時線上不變；更新 Lambda 或前端時失敗，可能只換了一部分。修好後合併新 PR 或按 Re-run **all** jobs（不要按 Re-run failed jobs，它不會重新判斷，可能把線上蓋回舊版）；詳見[部署手冊第 5 節](deploy-runbook.md#5-設定自動部署) |
+| 部署後出錯（含冒煙測試失敗） | 依[階段 5〈回滾策略〉](05-deployment.md#回滾策略)回滾 |
+| 部署金鑰（`farewatch-deploy`）外洩 | 立即停用金鑰；因為能部署任意程式到 Lambda，也要更換 SSM 機密與 Neon 密碼，並把 Lambda 換回確定沒問題的版本。步驟見[部署手冊第 5 節](deploy-runbook.md#5-設定自動部署) |
 | Neon 資料異常 | 剛發生的用 point-in-time restore；其餘從每週的 `pg_dump` 備份（存 S3，保留 4 份）還原 |
 
 ## 維護
