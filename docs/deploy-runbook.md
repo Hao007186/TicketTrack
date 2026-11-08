@@ -275,7 +275,11 @@ TAG=$(git rev-parse --short HEAD)
 5. **確認會收到失敗通知**：GitHub 右上角頭像 → Settings → Notifications → **Actions**，勾選 Email 與「Only notify for failed workflows」
 6. **第一次自動部署**：還沒有成功紀錄，所以不管改了什麼，後端和前端都會部署一次
 
-**在 GitHub 上看部署**：repo → Actions → Deploy。每次執行的名稱是 `Deploy <commit>`；CI 失敗或不符合條件（例如 fork 送來的 PR）的執行叫 `Skip <commit>`，不會部署。失敗時線上維持原本的版本（見 [階段 5〈回滾策略〉](05-deployment.md#回滾策略)），修好後合併新的 PR，或在執行頁按 **Re-run failed jobs**（image 已推過時會跳過，不會失敗）。
+**在 GitHub 上看部署**：repo → Actions → Deploy。每次執行的名稱是 `Deploy <commit>`；CI 失敗或不符合條件（例如 fork 送來的 PR）的執行叫 `Skip <commit>`，不會部署。失敗時線上維持原本的版本（見 [階段 5〈回滾策略〉](05-deployment.md#回滾策略)），修好後合併新的 PR，或在執行頁按 **Re-run all jobs**（image 已推過時會跳過，不會失敗）。
+
+> **不要按 Re-run failed jobs**：它不會重新判斷部署範圍，如果這期間已經有較新的版本部署成功，會把線上蓋回這個舊 commit。Re-run all jobs 會重新判斷，舊 commit 會被判成不部署。
+
+> 「部署分支只限 `main`」擋的是從其他分支觸發的工作流程；`workflow_run` 觸發的執行一律算在 `main` 上，所以 fork 的 PR 是靠 `deploy.yml` 裡 `scope` job 的 `if` 條件擋下。修改那幾個條件時要特別小心。
 
 **部署金鑰外洩**（出現在 log、Git、或發現不明的部署）：
 1. 主控台 → IAM → `farewatch-deploy` → Security credentials → 把金鑰 **Deactivate**（立即失效）

@@ -53,6 +53,13 @@ check "只改 docs" false false "$doc" "$doc2"
 check "中間有後端變更，最新只改文件" true false "$doc2" "$doc3"
 check "head 比 base 舊" false false "$doc" "$be"
 
+# 多筆部署紀錄（新到舊，空白分隔）：連續合併 A、B、C，CI 依 C → A → B 完成
+# A 那次判斷為不部署但仍記成 Deploy A；B 必須看出自己比已部署的 C 舊
+check "多筆紀錄：head 比其中一筆舊" false false "$fe $be" "$root"
+check "多筆紀錄：最新的紀錄排在後面也要用它" false false "$be $doc2" "$doc"
+# 基準要用歷史上最新的那筆（doc2），不是列表第一筆（be）
+check "多筆紀錄：用歷史上最新的一筆比較" true false "$be $doc2 0123456789abcdef0123456789abcdef01234567" "$doc3"
+
 git checkout -q -b side "$root"
 side="$(commit docs/side)"
 check "分岔歷史" true true "$side" "$doc"
