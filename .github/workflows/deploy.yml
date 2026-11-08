@@ -1,0 +1,150 @@
+# main 上的 CI 成功後，依變更自動部署後端與前端。
+# 設計：docs/superpowers/specs/2026-11-05-m1-auto-deploy-design.md；設定步驟見 docs/deploy-runbook.md
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# 實際要部署的 CI 才叫「Deploy <commit>」，其他（CI 失敗、fork 送來的分支）叫「Skip」。
+# scope job 靠這個名稱找上一次成功部署的 commit，所以不能讓 Skip 的執行被當成部署過
+run-name: >-
+  ${{ (github.event.workflow_run.conclusion == 'success'
+       && github.event.workflow_run.event == 'push'
+       && github.event.workflow_run.head_branch == 'main'
+       && github.event.workflow_run.head_repository.full_name == github.repository)
+      && format('Deploy {0}', github.event.workflow_run.head_sha)
+      || format('Skip {0}', github.event.workflow_run.head_sha) }}
+
+# 一次只跑一個部署；不取消進行中的部署，避免留下做一半的 migration
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  AWS_REGION: ap-southeast-2
+  HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+
+jobs:
+  scope:
+    # 只接受本 repo 的 main 被 push 且 CI 成功；fork 把分支取名 main 送 PR 時 event 是 pull_request
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_branch == 'main'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.scope.outputs.backend }}
+      frontend: ${{ steps.scope.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - id: last
+        name: 找最近幾次成功部署的 commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # 取多筆：連續合併時 CI 完成順序不固定，只看最新一筆可能把較舊的 commit 部署上去
+        # gh 失敗時整個 job 失敗（set -e），不能當成沒有紀錄而全部部署
+        run: |
+          shas="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --status success \
+            --limit 100 --json displayTitle \
+            --jq '[.[] | select(.displayTitle | startswith("Deploy ")) | .displayTitle | ltrimstr("Deploy ")][:10] | join(" ")')"
+          echo "最近成功的部署：${shas:-（沒有紀錄）}"
+          echo "shas=$shas" >>"$GITHUB_OUTPUT"
+      - id: scope
+        name: 判斷部署範圍
+        env:
+          DEPLOYED_SHAS: ${{ steps.last.outputs.shas }}
+        run: |
+          infra/scripts/deploy-scope.sh "$DEPLOYED_SHAS" "$HEAD_SHA" | tee -a "$GITHUB_OUTPUT"
+
+  backend:
+    needs: scope
+    if: needs.scope.outputs.backend == 'true'
+    # Lambda 是 arm64，直接在 arm64 機器上建 image
+    runs-on: ubuntu-24.04-arm
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: 建 image 並推上 ECR（已存在就跳過）
+        env:
+          ECR_REPO: ${{ vars.ECR_REPO }}
+        run: infra/scripts/push-image.sh "${HEAD_SHA::7}"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: 安裝 migration 需要的套件
+        working-directory: backend
+        run: uv sync --locked
+      - name: Migration
+        working-directory: backend
+        # DATABASE_URL 只放在這一步；Settings 要求 JWT_SECRET，migration 用不到，給明顯是假的值
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ENV: ci
+          JWT_SECRET: not-used-by-migrations
+        run: uv run python -m alembic upgrade head
+      - name: 更新 2 個 Lambda
+        env:
+          ECR_REPO: ${{ vars.ECR_REPO }}
+        run: infra/scripts/deploy-lambdas.sh "${HEAD_SHA::7}"
+
+  frontend:
+    needs: [scope, backend]
+    # backend 因為沒有後端變更而跳過時仍要部署前端；只有 backend 失敗才不跑
+    if: >-
+      !cancelled()
+      && needs.scope.result == 'success'
+      && needs.scope.outputs.frontend == 'true'
+      && needs.backend.result != 'failure'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: build 前端、上傳 S3、清 CloudFront 快取
+        env:
+          FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET }}
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: infra/scripts/deploy-frontend.sh
+
+  smoke:
+    needs: [scope, backend, frontend]
+    # 前面沒有失敗、且至少部署了一項才跑
+    if: >-
+      !cancelled()
+      && needs.scope.result == 'success'
+      && !contains(needs.*.result, 'failure')
+      && (needs.scope.outputs.backend == 'true' || needs.scope.outputs.frontend == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      # /health 刻意不查資料庫，要靠 /airports 才會發現資料庫連不上
+      - name: 冒煙測試
+        run: |
+          for url in https://hao007186.com/ https://hao007186.com/api/v1/health https://hao007186.com/api/v1/airports; do
+            echo "檢查 $url"
+            curl -fsS -o /dev/null --retry 5 --retry-all-errors --retry-delay 5 "$url"
+          done
