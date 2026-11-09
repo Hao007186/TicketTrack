@@ -6,11 +6,12 @@ from datetime import date
 from sqlalchemy import Select, and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.admin.schemas import AdminUserOut
+from app.modules.admin.schemas import AdminUserOut, AdminWatchOut
 from app.modules.auth.models import RefreshToken
 from app.modules.users.models import User
 from app.modules.watches import slots
-from app.modules.watches.models import Watch
+from app.modules.watches.models import PriceQuery, Watch
+from app.modules.watches.service import WatchNotFound, remove_watch
 
 SLOT_STATUSES = ("active", "queued")
 
@@ -23,6 +24,10 @@ class CannotDeactivate(Exception):
     def __init__(self, message: str) -> None:
         super().__init__(message)
         self.message = message
+
+
+class CannotDeleteDemoWatch(Exception):
+    pass
 
 
 class AlreadyInState(Exception):
@@ -116,3 +121,45 @@ async def reactivate_user(session: AsyncSession, public_id: uuid.UUID) -> AdminU
     user.is_active = True
     await session.commit()
     return await _get_user_out(session, public_id)
+
+
+async def list_watches(session: AsyncSession) -> list[AdminWatchOut]:
+    """佔名額或排隊中的追蹤（不含示範資料），依補位順序由舊到新。"""
+    rows = await session.execute(
+        select(Watch, User.email, PriceQuery)
+        .join(User, Watch.user_id == User.id)
+        .join(PriceQuery, Watch.price_query_id == PriceQuery.id)
+        .where(Watch.status.in_(SLOT_STATUSES), PriceQuery.is_demo.is_(False))
+        .order_by(Watch.created_at, Watch.id)
+        .execution_options(populate_existing=True)
+    )
+    return [
+        AdminWatchOut(
+            public_id=watch.public_id,
+            owner_email=email,
+            origin=query.origin,
+            destination=query.destination,
+            depart_date=query.depart_date,
+            return_date=query.return_date,
+            status=watch.status,
+            created_at=watch.created_at,
+        )
+        for watch, email, query in rows
+    ]
+
+
+async def delete_any_watch(session: AsyncSession, public_id: uuid.UUID, today: date) -> None:
+    await slots.acquire_watch_lock(session)
+    row = (
+        await session.execute(
+            select(Watch, PriceQuery.is_demo)
+            .join(PriceQuery, Watch.price_query_id == PriceQuery.id)
+            .where(Watch.public_id == public_id)
+        )
+    ).one_or_none()
+    if row is None:
+        raise WatchNotFound
+    watch, is_demo = row
+    if is_demo:
+        raise CannotDeleteDemoWatch
+    await remove_watch(session, watch, today)

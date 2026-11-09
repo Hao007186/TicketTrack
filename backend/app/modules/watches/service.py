@@ -211,6 +211,11 @@ async def delete_watch(
 ) -> None:
     await slots.acquire_watch_lock(session)
     watch = await get_watch(session, user, public_id)
+    await remove_watch(session, watch, today)
+
+
+async def remove_watch(session: AsyncSession, watch: Watch, today: date) -> None:
+    """刪除追蹤並補位；呼叫前要已取得 acquire_watch_lock。"""
     # price_query 保留，之後的價格歷史會掛在它上面
     await session.delete(watch)
     await session.flush()
