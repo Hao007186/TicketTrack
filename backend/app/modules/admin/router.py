@@ -8,8 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.clock import get_today
 from app.db.session import get_session
 from app.modules.admin import service
-from app.modules.admin.schemas import AdminUserOut, AdminWatchOut
+from app.modules.admin.schemas import AdminUsageOut, AdminUserOut, AdminWatchOut
+from app.modules.admin.usage import get_usage
 from app.modules.auth.deps import AdminUser
+from app.modules.prices.deps import ProviderDep
 from app.modules.watches.service import WatchNotFound
 
 router = APIRouter(tags=["admin"])
@@ -77,3 +79,10 @@ async def delete_watch(
     except _ERRORS as e:
         raise _http_error(e) from None
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/usage")
+async def usage(
+    _: AdminUser, session: SessionDep, provider: ProviderDep, today: TodayDep
+) -> AdminUsageOut:
+    return await get_usage(session, provider, today)
