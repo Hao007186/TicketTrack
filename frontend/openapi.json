@@ -1,6 +1,216 @@
 {
   "components": {
     "schemas": {
+      "AdminUsageOut": {
+        "properties": {
+          "checked_today": {
+            "title": "Checked Today",
+            "type": "integer"
+          },
+          "daily_budget": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Budget"
+          },
+          "email_failed": {
+            "title": "Email Failed",
+            "type": "integer"
+          },
+          "email_pending": {
+            "title": "Email Pending",
+            "type": "integer"
+          },
+          "email_sent": {
+            "title": "Email Sent",
+            "type": "integer"
+          },
+          "instant_remaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instant Remaining"
+          },
+          "instant_today": {
+            "title": "Instant Today",
+            "type": "integer"
+          },
+          "month_calls": {
+            "title": "Month Calls",
+            "type": "integer"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "serpapi_remaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serpapi Remaining"
+          },
+          "slots_max": {
+            "title": "Slots Max",
+            "type": "integer"
+          },
+          "slots_used": {
+            "title": "Slots Used",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "serpapi_remaining",
+          "daily_budget",
+          "instant_remaining",
+          "month_calls",
+          "checked_today",
+          "instant_today",
+          "slots_used",
+          "slots_max",
+          "queued",
+          "email_sent",
+          "email_failed",
+          "email_pending"
+        ],
+        "title": "AdminUsageOut",
+        "type": "object"
+      },
+      "AdminUserOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_demo": {
+            "title": "Is Demo",
+            "type": "boolean"
+          },
+          "public_id": {
+            "format": "uuid",
+            "title": "Public Id",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "slot_count": {
+            "title": "Slot Count",
+            "type": "integer"
+          },
+          "watch_count": {
+            "title": "Watch Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "public_id",
+          "email",
+          "display_name",
+          "role",
+          "is_demo",
+          "is_active",
+          "created_at",
+          "slot_count",
+          "watch_count"
+        ],
+        "title": "AdminUserOut",
+        "type": "object"
+      },
+      "AdminWatchOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "depart_date": {
+            "format": "date",
+            "title": "Depart Date",
+            "type": "string"
+          },
+          "destination": {
+            "title": "Destination",
+            "type": "string"
+          },
+          "origin": {
+            "title": "Origin",
+            "type": "string"
+          },
+          "owner_email": {
+            "title": "Owner Email",
+            "type": "string"
+          },
+          "public_id": {
+            "format": "uuid",
+            "title": "Public Id",
+            "type": "string"
+          },
+          "return_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Date"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "public_id",
+          "owner_email",
+          "origin",
+          "destination",
+          "depart_date",
+          "return_date",
+          "status",
+          "created_at"
+        ],
+        "title": "AdminWatchOut",
+        "type": "object"
+      },
       "AirlineOut": {
         "properties": {
           "iata": {
@@ -972,6 +1182,229 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/usage": {
+      "get": {
+        "operationId": "usage_api_v1_admin_usage_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUsageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Usage",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "operationId": "list_users_api_v1_admin_users_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminUserOut"
+                  },
+                  "title": "Response List Users Api V1 Admin Users Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Users",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{public_id}/deactivate": {
+      "post": {
+        "operationId": "deactivate_user_api_v1_admin_users__public_id__deactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Deactivate User",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{public_id}/reactivate": {
+      "post": {
+        "operationId": "reactivate_user_api_v1_admin_users__public_id__reactivate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reactivate User",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/watches": {
+      "get": {
+        "operationId": "list_watches_api_v1_admin_watches_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminWatchOut"
+                  },
+                  "title": "Response List Watches Api V1 Admin Watches Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Watches",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/watches/{public_id}": {
+      "delete": {
+        "operationId": "delete_watch_api_v1_admin_watches__public_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Watch",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/airlines": {
       "get": {
         "operationId": "list_airlines_api_v1_airlines_get",

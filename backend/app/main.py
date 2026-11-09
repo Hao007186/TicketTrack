@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.api import health
 from app.core.config import get_settings
 from app.core.middleware import BodySizeLimitMiddleware, OriginVerifyMiddleware
+from app.modules.admin import router as admin_router
 from app.modules.auth import router as auth_router
 from app.modules.notifications import router as notifications_router
 from app.modules.prices import reference_router as price_reference_router
@@ -24,6 +25,7 @@ def create_app() -> FastAPI:
     app.include_router(prices_router.router, prefix=API_PREFIX)
     app.include_router(price_reference_router.router, prefix=API_PREFIX)
     app.include_router(notifications_router.router, prefix=API_PREFIX)
+    app.include_router(admin_router.router, prefix=f"{API_PREFIX}/admin")
 
     # 後加的在外層：先檢查來源，再檢查大小（外來的請求不必讀 body）
     secret = get_settings().origin_verify_secret

@@ -311,6 +311,11 @@ TAG=$(git rev-parse --short HEAD)
   ```
   只換程式，不會倒回 migration。回滾後下一次合併改到 `backend/` 的 PR 會再部署新版；如果下一個 PR 沒改後端，線上會維持回滾的版本。
   Terraform 已經不管 Lambda 的 image（`ignore_changes`），所以 `terraform apply -var image_tag=...` 不能用來回滾。
+- **設定管理員**（後台 `/admin` 只有管理員能進，只要做一次）：在 Neon 主控台的 SQL Editor 執行
+  ```sql
+  UPDATE users SET role = 'admin' WHERE email = '<你的 Email>';
+  ```
+  確認回傳 `UPDATE 1`，重新整理網站後導覽列會出現「後台」。管理員不能被停用；要取消時把 `role` 改回 `'user'`
 
 ## 7. 拆除
 1. 清空前端 bucket（含所有版本）：S3 主控台選 `farewatch-frontend-<帳號 ID>` → Empty

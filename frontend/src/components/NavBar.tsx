@@ -56,6 +56,7 @@ function UserMenu() {
 }
 
 export function NavBar() {
+  const { user } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   return (
     <header className="border-b border-slate-200 bg-white">
@@ -67,6 +68,11 @@ export function NavBar() {
           <NavLink to="/watches" end className={navClass}>
             我的追蹤
           </NavLink>
+          {user?.role === "admin" && (
+            <NavLink to="/admin" className={navClass}>
+              後台
+            </NavLink>
+          )}
         </nav>
         <div className="ml-auto flex items-center gap-1">
           <NotificationBell />
@@ -89,12 +95,17 @@ export function NavBar() {
 }
 
 function MobileMenu({ onClose }: { onClose: () => void }) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   return (
     <nav className="flex flex-col border-t border-slate-200 px-4 py-2 md:hidden">
       <NavLink to="/watches" end className={navClass} onClick={onClose}>
         我的追蹤
       </NavLink>
+      {user?.role === "admin" && (
+        <NavLink to="/admin" className={navClass} onClick={onClose}>
+          後台
+        </NavLink>
+      )}
       <NavLink to="/settings" className={navClass} onClick={onClose}>
         設定
       </NavLink>

@@ -15,3 +15,11 @@ export const demo: Me = {
   role: "user",
   is_demo: true,
 };
+
+export const admin: Me = {
+  public_id: "00000000-0000-0000-0000-0000000ad111",
+  email: "admin@example.com",
+  display_name: "管理員",
+  role: "admin",
+  is_demo: false,
+};
