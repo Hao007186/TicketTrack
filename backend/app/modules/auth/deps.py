@@ -52,3 +52,12 @@ async def require_writable_user(user: CurrentUser) -> User:
 
 
 WritableUser = Annotated[User, Depends(require_writable_user)]
+
+
+async def require_admin(user: CurrentUser) -> User:
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理員權限")
+    return user
+
+
+AdminUser = Annotated[User, Depends(require_admin)]

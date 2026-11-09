@@ -109,12 +109,14 @@ async def create_user(
     password: str = "correct-horse",
     is_demo: bool = False,
     is_active: bool = True,
+    role: str = "user",
 ) -> User:
     user = User(
         email=email,
         password_hash=hash_password(password),
         is_demo=is_demo,
         is_active=is_active,
+        role=role,
     )
     session.add(user)
     await session.flush()
