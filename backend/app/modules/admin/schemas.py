@@ -14,6 +14,8 @@ class AdminUserOut(BaseModel):
     created_at: datetime
     # 狀態是 active 或 queued 的追蹤數
     slot_count: int
+    # 全部狀態的追蹤數；停用時會全部刪掉
+    watch_count: int
 
 
 class AdminWatchOut(BaseModel):

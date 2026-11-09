@@ -48,6 +48,8 @@ async def test_list_users(client: AsyncClient, db_session: AsyncSession) -> None
     ]
     by_email = {r["email"]: r for r in rows}
     assert by_email["alice@example.com"]["slot_count"] == 2
+    # 停用時全部都會刪掉，確認視窗要用這個數字
+    assert by_email["alice@example.com"]["watch_count"] == 3
     assert by_email["bob@example.com"]["slot_count"] == 0
     assert by_email["bob@example.com"]["is_active"] is False
     assert by_email["admin@example.com"]["role"] == "admin"

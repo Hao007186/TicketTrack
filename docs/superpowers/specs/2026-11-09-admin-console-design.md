@@ -60,6 +60,7 @@
 - 已登入的分頁會在下一次 API 請求時被登出（`get_current_user` 每次都查 `is_active`）
 - 帳號本身、站內通知、通知設定都保留；Email 仍被佔用，不能用同一個 Email 重新註冊
 - 對已停用的帳號再停用：回 409
+- 建立追蹤在拿到全站鎖之後重新確認帳號仍是啟用中，否則回 401：避免「登入檢查通過後、等鎖期間被停用」的請求替已停用的帳號佔名額
 
 ### 恢復帳號
 - `is_active = true`，對方可以用原本的 Email 和密碼登入；追蹤不會回來
@@ -76,7 +77,7 @@
 
 | 方法與路徑 | 內容 |
 |---|---|
-| `GET /admin/users` | 全部帳號，依註冊時間新到舊。每筆：`public_id`、`email`、`display_name`、`role`、`is_demo`、`is_active`、`created_at`、`slot_count`（狀態是 active 或 queued 的追蹤數） |
+| `GET /admin/users` | 全部帳號，依註冊時間新到舊。每筆：`public_id`、`email`、`display_name`、`role`、`is_demo`、`is_active`、`created_at`、`slot_count`（狀態是 active 或 queued 的追蹤數）、`watch_count`（全部狀態的追蹤數，停用確認視窗用這個，因為停用會全部刪掉） |
 | `POST /admin/users/{public_id}/deactivate` | 停用，回傳更新後的帳號 |
 | `POST /admin/users/{public_id}/reactivate` | 恢復，回傳更新後的帳號 |
 | `GET /admin/watches` | 狀態是 `active` 或 `queued`、且不是示範資料的追蹤，依建立時間舊到新（跟排隊補位的順序一致）。每筆：`public_id`、擁有者 `email`、`origin`、`destination`、`depart_date`、`return_date`、`status`、`created_at` |

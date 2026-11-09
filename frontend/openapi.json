@@ -132,6 +132,10 @@
           "slot_count": {
             "title": "Slot Count",
             "type": "integer"
+          },
+          "watch_count": {
+            "title": "Watch Count",
+            "type": "integer"
           }
         },
         "required": [
@@ -142,7 +146,8 @@
           "is_demo",
           "is_active",
           "created_at",
-          "slot_count"
+          "slot_count",
+          "watch_count"
         ],
         "title": "AdminUserOut",
         "type": "object"

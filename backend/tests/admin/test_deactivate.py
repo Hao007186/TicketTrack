@@ -1,13 +1,18 @@
 import uuid
+from datetime import timedelta
 
+import pytest
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.auth.models import RefreshToken
 from app.modules.users.models import User
+from app.modules.watches import service as watch_service
 from app.modules.watches.models import Watch
+from app.modules.watches.schemas import WatchCreate
 from tests.admin.conftest import (
+    TODAY,
     admin_headers,
     auth_headers,
     demo_headers,
@@ -187,3 +192,22 @@ async def test_non_admin_forbidden(client: AsyncClient, db_session: AsyncSession
     for action in ("deactivate", "reactivate"):
         resp = await client.post(f"{URL}/{bob.public_id}/{action}", headers=headers)
         assert resp.status_code == 403
+
+
+async def test_create_watch_after_deactivate_rejected(db_session: AsyncSession) -> None:
+    """建立追蹤通過登入檢查後才被停用（等鎖期間）：拿到鎖後要重新確認帳號狀態。"""
+    alice = await create_user(db_session, email="alice@example.com")
+    # 直接改 DB、不更新記憶體中的物件，模擬登入檢查時讀到的舊狀態
+    await db_session.execute(
+        text("UPDATE users SET is_active = false WHERE id = :id"), {"id": alice.id}
+    )
+    assert alice.is_active is True
+    data = WatchCreate(
+        origin="TPE",
+        destination="NRT",
+        depart_date=TODAY + timedelta(days=30),
+        target_price=9000,
+    )
+    with pytest.raises(watch_service.AccountInactive):
+        await watch_service.create_watch(db_session, alice, data, TODAY)
+    assert await _watch_count(db_session, alice) == 0

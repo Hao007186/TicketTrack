@@ -505,6 +505,8 @@ export interface components {
       role: string;
       /** Slot Count */
       slot_count: number;
+      /** Watch Count */
+      watch_count: number;
     };
     /** AdminWatchOut */
     AdminWatchOut: {

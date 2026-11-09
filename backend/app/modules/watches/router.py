@@ -30,6 +30,13 @@ def _http_error(e: Exception) -> HTTPException:
             return HTTPException(status.HTTP_409_CONFLICT, "已過期的追蹤不能修改")
         case service.InvalidWatchInput(message=message):
             return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, message)
+        case service.AccountInactive():
+            # 與 get_current_user 擋下停用帳號時相同
+            return HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                "未登入或登入已過期",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     raise e
 
 
@@ -38,6 +45,7 @@ _ERRORS = (
     service.WatchLimitReached,
     service.WatchExpired,
     service.InvalidWatchInput,
+    service.AccountInactive,
 )
 
 

@@ -34,6 +34,10 @@ class WatchExpired(Exception):
     pass
 
 
+class AccountInactive(Exception):
+    pass
+
+
 class InvalidWatchInput(Exception):
     def __init__(self, message: str) -> None:
         super().__init__(message)
@@ -87,6 +91,9 @@ async def _catch_up(session: AsyncSession, today: date) -> None:
 
 async def create_watch(session: AsyncSession, user: User, data: WatchCreate, today: date) -> Watch:
     await slots.acquire_watch_lock(session)
+    # 登入檢查在拿鎖之前；等鎖期間可能被後台停用，停用後不能再佔名額
+    if not await session.scalar(select(User.is_active).where(User.id == user.id)):
+        raise AccountInactive
     await _catch_up(session, today)
     if await slots.count_user_slots(session, user.id) >= slots.MAX_WATCHES_PER_USER:
         raise WatchLimitReached

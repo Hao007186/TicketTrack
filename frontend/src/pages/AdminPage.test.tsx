@@ -38,13 +38,15 @@ function account(overrides: Partial<AdminUser>): AdminUser {
     is_active: true,
     created_at: "2026-11-01T00:00:00Z",
     slot_count: 0,
+    watch_count: 0,
     ...overrides,
   };
 }
 
 const users: AdminUser[] = [
   account({ public_id: admin.public_id, email: admin.email, role: "admin" }),
-  account({ public_id: alice.public_id, email: alice.email, slot_count: 2 }),
+  // 暫停、過期的也會刪掉，所以確認視窗用 watch_count
+  account({ public_id: alice.public_id, email: alice.email, slot_count: 2, watch_count: 4 }),
   account({
     public_id: "00000000-0000-0000-0000-0000000000b0",
     email: "bob@example.com",
@@ -143,7 +145,7 @@ describe("後台", () => {
     const dialog = screen.getByRole("dialog");
     expect(
       within(dialog).getByText(
-        `停用 ${alice.email} 後，他的 2 個追蹤會被刪除，恢復帳號後也不會回來。`,
+        `停用 ${alice.email} 後，他的 4 個追蹤會被刪除，恢復帳號後也不會回來。`,
       ),
     ).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("button", { name: "停用" }));

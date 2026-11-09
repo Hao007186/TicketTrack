@@ -82,7 +82,7 @@ function AdminContent({ selfId }: { selfId: string }) {
 
 function confirmMessage(pending: Pending): string {
   if (pending?.kind === "deactivate")
-    return `停用 ${pending.user.email} 後，他的 ${pending.user.slot_count} 個追蹤會被刪除，恢復帳號後也不會回來。`;
+    return `停用 ${pending.user.email} 後，他的 ${pending.user.watch_count} 個追蹤會被刪除，恢復帳號後也不會回來。`;
   if (pending?.kind === "delete") {
     const w = pending.watch;
     return `確定要刪除 ${w.owner_email} 的 ${w.origin}→${w.destination}（${formatDate(w.depart_date)}）嗎？`;

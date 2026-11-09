@@ -3,7 +3,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import Select, and_, delete, func, select
+from sqlalchemy import Select, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.admin.schemas import AdminUserOut, AdminWatchOut
@@ -36,16 +36,17 @@ class AlreadyInState(Exception):
         self.message = message
 
 
-def _users_with_slots() -> Select[User, int]:
-    slot_count = func.count(Watch.id).label("slot_count")
+def _users_with_counts() -> Select[User, int, int]:
+    slot_count = func.count(Watch.id).filter(Watch.status.in_(SLOT_STATUSES))
+    watch_count = func.count(Watch.id)
     return (
-        select(User, slot_count)
-        .outerjoin(Watch, and_(Watch.user_id == User.id, Watch.status.in_(SLOT_STATUSES)))
+        select(User, slot_count, watch_count)
+        .outerjoin(Watch, Watch.user_id == User.id)
         .group_by(User.id)
     )
 
 
-def _to_out(user: User, slot_count: int) -> AdminUserOut:
+def _to_out(user: User, slot_count: int, watch_count: int) -> AdminUserOut:
     return AdminUserOut(
         public_id=user.public_id,
         email=user.email,
@@ -55,30 +56,30 @@ def _to_out(user: User, slot_count: int) -> AdminUserOut:
         is_active=user.is_active,
         created_at=user.created_at,
         slot_count=slot_count,
+        watch_count=watch_count,
     )
 
 
 async def list_users(session: AsyncSession) -> list[AdminUserOut]:
     rows = await session.execute(
-        _users_with_slots()
+        _users_with_counts()
         .order_by(User.created_at.desc(), User.id.desc())
         .execution_options(populate_existing=True)
     )
-    return [_to_out(user, count) for user, count in rows]
+    return [_to_out(*row) for row in rows]
 
 
 async def _get_user_out(session: AsyncSession, public_id: uuid.UUID) -> AdminUserOut:
     row = (
         await session.execute(
-            _users_with_slots()
+            _users_with_counts()
             .where(User.public_id == public_id)
             .execution_options(populate_existing=True)
         )
     ).one_or_none()
     if row is None:
         raise UserNotFound
-    user, count = row
-    return _to_out(user, count)
+    return _to_out(*row)
 
 
 async def _find_user(session: AsyncSession, public_id: uuid.UUID) -> User:
