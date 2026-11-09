@@ -2,6 +2,8 @@
 
 - api_handler：Function URL 的 HTTP 請求，經 Mangum 交給 FastAPI
 - jobs_handler：EventBridge Scheduler 的排程，事件內容 {"job": "..."} 決定要做什麼
+
+兩個 handler 都由 GitHub Actions 的 deploy.yml 在合併後自動換版。
 """
 
 import asyncio
