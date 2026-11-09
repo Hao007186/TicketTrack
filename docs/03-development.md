@@ -42,7 +42,7 @@ Project_TicketTrack/
 1. 骨架 + docker-compose + CI（ci.yml）
 2. 帳號系統 + 示範帳號（US-01、US-11）
 3. 機場／航空公司資料 + 追蹤 CRUD + 生命週期（US-02、US-03）
-4. PriceProvider：mock → SerpApi；checker、查詢合併、額度預算與輪流查價（US-10）
+4. PriceProvider：mock → SerpApi；checker、查詢合併、額度預算與輪流查價（US-10 的用量頁在 M1 完成後另做，見 `docs/superpowers/specs/2026-11-09-admin-console-design.md`）
 5. 價格基準 + 觸發規則 + alerts + notifications + notifier（站內、Email）（US-04、US-06、US-09）
 6. 前端頁面 + 價格歷史圖（US-05）
 7. Terraform（AWS + Cloudflare）+ deploy pipeline + 基本告警 → **正式上線**
