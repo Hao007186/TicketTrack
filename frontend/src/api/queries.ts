@@ -23,6 +23,9 @@ export type Notification = components["schemas"]["NotificationOut"];
 export type PriceReference = components["schemas"]["PriceReferenceOut"];
 export type InstantCheck = components["schemas"]["InstantCheckOut"];
 export type PriceCheck = components["schemas"]["PriceCheckOut"];
+export type AdminUser = components["schemas"]["AdminUserOut"];
+export type AdminWatch = components["schemas"]["AdminWatchOut"];
+export type AdminUsage = components["schemas"]["AdminUsageOut"];
 
 // 寫入成功後用這些 key 讓相關資料重新抓取；前綴相同的 key 會一起失效
 export const keys = {
@@ -35,6 +38,10 @@ export const keys = {
   notifications: ["notifications"] as const,
   unread: ["notifications", "unread"] as const,
   settings: ["notification-settings"] as const,
+  admin: ["admin"] as const,
+  adminUsers: ["admin", "users"] as const,
+  adminWatches: ["admin", "watches"] as const,
+  adminUsage: ["admin", "usage"] as const,
 };
 
 export function useAirports() {
@@ -293,4 +300,68 @@ export function useUnreadCount() {
         .unread_count,
     refetchInterval: 60_000,
   });
+}
+
+export function useAdminUsers() {
+  return useQuery({
+    queryKey: keys.adminUsers,
+    queryFn: async () => unwrap(await api.GET("/api/v1/admin/users")),
+  });
+}
+
+export function useAdminWatches() {
+  return useQuery({
+    queryKey: keys.adminWatches,
+    queryFn: async () => unwrap(await api.GET("/api/v1/admin/watches")),
+  });
+}
+
+export function useAdminUsage() {
+  return useQuery({
+    queryKey: keys.adminUsage,
+    queryFn: async () => unwrap(await api.GET("/api/v1/admin/usage")),
+  });
+}
+
+/** 後台操作會改變名額與補位：後台三個區塊和「我的追蹤」（admin 也可能刪到自己的）都要重抓 */
+function useAdminMutation(mutationFn: (publicId: string) => Promise<unknown>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: keys.admin }),
+        queryClient.invalidateQueries({ queryKey: keys.watches }),
+      ]),
+  });
+}
+
+export function useDeactivateUser() {
+  return useAdminMutation(async (publicId) =>
+    unwrap(
+      await api.POST("/api/v1/admin/users/{public_id}/deactivate", {
+        params: { path: { public_id: publicId } },
+      }),
+    ),
+  );
+}
+
+export function useReactivateUser() {
+  return useAdminMutation(async (publicId) =>
+    unwrap(
+      await api.POST("/api/v1/admin/users/{public_id}/reactivate", {
+        params: { path: { public_id: publicId } },
+      }),
+    ),
+  );
+}
+
+export function useAdminDeleteWatch() {
+  return useAdminMutation(async (publicId) =>
+    unwrap(
+      await api.DELETE("/api/v1/admin/watches/{public_id}", {
+        params: { path: { public_id: publicId } },
+      }),
+    ),
+  );
 }
