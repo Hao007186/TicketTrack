@@ -10,7 +10,7 @@
   - **立即查價**：建立追蹤或修改條件時立刻查價、表單可查目前價格並用典型低價填目標價，每人每天最多 3 次；spec／plan 在 `docs/superpowers/`；已合併（PR #15）並部署（`41bc195`），2026-11-05 線上實測通過
   - **改目標價即時判斷**：只改目標價，或這組條件今天已查過時，拿最近 24 小時內的最新價格比目標價，達標就當下通知，不花額度；已合併（PR #16）並部署（`41bc195`），2026-11-05 線上實測通過
   - **#7c**（GitHub Actions 自動部署）：spec／plan 在 `docs/superpowers/`；已上線（PR #21、#22）：main 上的 CI 成功後，`deploy.yml` 比對上次成功部署的 commit，只部署有變更的後端（image、migration、2 個 Lambda）或前端，最後跑冒煙測試；Terraform 仍手動 apply。2026-11-08～09 實測通過：只改前端（PR #23）、只改後端（PR #24）、手動回滾、部署失敗通知（PR #25，停用金鑰後重跑）、只改文件不部署（PR #26）。設定步驟見 `docs/deploy-runbook.md` 第 5 節，回滾見第 6 節
-  - **後台**（分支 `feat/admin-console`）：`/admin` 只有 `role = 'admin'` 能進；可刪除任何人的追蹤、停用（同時刪掉他的追蹤）與恢復帳號，並顯示用量（US-10）。spec／plan 在 `docs/superpowers/`；開發中、尚未部署，部署後要照 `docs/deploy-runbook.md` 第 6 節設定管理員
+  - **後台**：`/admin` 只有 `role = 'admin'` 能進；可刪除任何人的追蹤、停用（同時刪掉他的追蹤）與恢復帳號，並顯示用量（US-10）。spec／plan 在 `docs/superpowers/`；已合併（PR #27）並自動部署（`237211a`），管理員已照 `docs/deploy-runbook.md` 第 6 節設定；2026-11-10 線上驗收通過（用量、帳號與追蹤列表、刪除追蹤、停用後登出且不能登入、恢復後追蹤不回來）
 - 正式環境：`https://hao007186.com`，AWS ap-southeast-2（帳號只開放雪梨），部署步驟見 `docs/deploy-runbook.md`
 - 架構文件是草稿第 3 版：`docs/architecture.md` 是總覽，`docs/01-requirements.md` ~ `docs/06-operations.md` 是 SDLC 6 個階段
 
