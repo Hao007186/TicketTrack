@@ -298,7 +298,39 @@ TAG=$(git rev-parse --short HEAD)
   ```
   有新的 migration 時，要在 `deploy-lambdas.sh` **之前**跑 migration。
 - **更新前端**：`infra/scripts/deploy-frontend.sh`（舊的 JS／CSS 不刪，讓還開著舊頁面的人不會出錯；`index.html` 設成每次重新確認）
-- **有新的 migration**：照第 3 節第 5 步，只跑 `alembic upgrade head`。migration 一律向後相容，先跑 migration 再更新後端
+- **有新的 migration**：照第 3 節第 5 步，只跑 `alembic upgrade head`。migration 一律向後相容，先跑 migration 再更新後端。跑之前先照下一項備份資料庫
+- **備份資料庫**：PR 有改到 `backend/migrations/versions/` 時，**合併前**一定要做（合併後自動部署會馬上跑 migration）；其他時候想到也可以做。Neon 免費版的時間點還原只能回到很短的時間內，所以主要靠這份備份。
+  備份檔裡有使用者的 Email 和密碼雜湊，**只放在 repo 外面**（下面用 `~/farewatch-backups`，也就是 `C:\Users\User\farewatch-backups`），不要 commit、不要傳給別人；想多一份可以複製到自己的雲端硬碟。
+  先開好 Docker Desktop（本機不用另外裝 PostgreSQL，`pg_dump` 從 `postgres:16` image 借用，版本要和 Neon 的 Postgres 一樣）：
+  ```bash
+  mkdir -p ~/farewatch-backups
+  read -rs DATABASE_URL && export DATABASE_URL   # Neon 的直連網址（2.4，postgresql:// 開頭）
+  export FILE="farewatch-$(date +%Y%m%d-%H%M).dump"
+  MSYS_NO_PATHCONV=1 docker run --rm -e DATABASE_URL -e FILE \
+    -v "$(cygpath -w ~/farewatch-backups):/backup" postgres:16 \
+    sh -c 'pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="/backup/$FILE"'
+  unset DATABASE_URL
+  # 確認備份讀得出來：應該列出 16 左右（每張資料表一行）
+  MSYS_NO_PATHCONV=1 docker run --rm -e FILE -v "$(cygpath -w ~/farewatch-backups):/backup" postgres:16 \
+    sh -c 'pg_restore --list "/backup/$FILE"' | grep -c "TABLE DATA"
+  ls -lh ~/farewatch-backups
+  ```
+  出現 `server version mismatch` 表示 Neon 升級了 Postgres，把兩處的 `postgres:16` 改成同一版。舊的備份自己決定留幾份（建議至少留最近 3 份）。
+- **從備份還原**（會用備份**蓋掉**正式資料庫的全部資料，備份之後新增的追蹤、價格、通知都會不見，確定要做再做）：
+  1. 避開排程時間（台灣時間 08:00 查價、09:00 與 11:00 重寄、00:10 維護）
+  2. 先照上一項再備份一次目前的資料庫，萬一還原錯了還能回來
+  3. 還原（`FILE` 換成要用的備份檔名）：
+     ```bash
+     read -rs DATABASE_URL && export DATABASE_URL   # Neon 的直連網址
+     export FILE=farewatch-20261111-2318.dump
+     MSYS_NO_PATHCONV=1 docker run --rm -e DATABASE_URL -e FILE \
+       -v "$(cygpath -w ~/farewatch-backups):/backup" postgres:16 \
+       sh -c 'pg_restore --clean --if-exists --no-owner --no-privileges --single-transaction --dbname="$DATABASE_URL" "/backup/$FILE"'
+     unset DATABASE_URL
+     ```
+     `--single-transaction`：中途出錯會整個取消，資料庫維持原樣
+  4. 資料庫的結構也會回到備份時的 migration 版本。線上程式如果比備份新，看還原的原因決定：是新的 migration 出問題，就用下面的「回滾後端」換回備份時的版本；只是資料被弄壞，就照第 3 節第 5 步再跑一次 `alembic upgrade head`
+  5. 打開網站確認登入、追蹤列表正常
 - **更換機密**：`MSYS_NO_PATHCONV=1 aws ssm put-parameter --name /farewatch/prod/<名稱> --type SecureString --overwrite --value=...`。Lambda 只在冷啟動時讀 SSM，改完要讓它重新啟動：
   ```bash
   aws lambda update-function-configuration --function-name farewatch-api --description "rotated $(date +%F)"
@@ -309,7 +341,7 @@ TAG=$(git rev-parse --short HEAD)
   aws ecr describe-images --repository-name farewatch-backend \
     --query "sort_by(imageDetails,&imagePushedAt)[].imageTags[0]" --output text
   ```
-  只換程式，不會倒回 migration。回滾後下一次合併改到 `backend/` 的 PR 會再部署新版；如果下一個 PR 沒改後端，線上會維持回滾的版本。
+  只換程式，不會倒回 migration（資料要倒回去時見上面的「從備份還原」）。回滾後下一次合併改到 `backend/` 的 PR 會再部署新版；如果下一個 PR 沒改後端，線上會維持回滾的版本。
   Terraform 已經不管 Lambda 的 image（`ignore_changes`），所以 `terraform apply -var image_tag=...` 不能用來回滾。
 - **設定管理員**（後台 `/admin` 只有管理員能進，只要做一次）：在 Neon 主控台的 SQL Editor 執行
   ```sql

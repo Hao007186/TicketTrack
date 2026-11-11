@@ -37,7 +37,7 @@
 
 ## 回滾策略
 - 程式：`infra/scripts/deploy-lambdas.sh <上一版的 tag>`（ECR 保留 3 個版本）；只換程式，不會倒回 migration。由人判斷要不要回滾，不自動回滾
-- 資料庫：migration 一律向後相容（先加欄位、再改程式、最後才刪欄位）；資料救援以每週 `pg_dump` 備份為主，Neon 免費版的 point-in-time restore 視窗很短（實作時確認當時的額度），只能救剛發生的誤操作
+- 資料庫：migration 一律向後相容（先加欄位、再改程式、最後才刪欄位）；資料救援以手動 `pg_dump` 備份為主（合併含新 migration 的 PR 前一定備份，存在本機 repo 外面，步驟見[部署手冊第 6 節](deploy-runbook.md#6-之後的更新)），Neon 免費版的 point-in-time restore 視窗很短（實作時確認當時的額度），只能救剛發生的誤操作
 - 前端：S3 開啟版本控制，可以還原上一版
 
 ## 成本控管

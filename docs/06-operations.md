@@ -30,7 +30,7 @@
 | 自動部署失敗（GitHub 寄失敗通知信） | 到 repo → Actions → Deploy 看哪一步失敗。建 image 或 migration 失敗時線上不變；更新 Lambda 或前端時失敗，可能只換了一部分。修好後合併新 PR 或按 Re-run **all** jobs（不要按 Re-run failed jobs，它不會重新判斷，可能把線上蓋回舊版）；詳見[部署手冊第 5 節](deploy-runbook.md#5-設定自動部署) |
 | 部署後出錯（含冒煙測試失敗） | 依[階段 5〈回滾策略〉](05-deployment.md#回滾策略)回滾 |
 | 部署金鑰（`farewatch-deploy`）外洩 | 立即停用金鑰；因為能部署任意程式到 Lambda，也要更換 SSM 機密與 Neon 密碼，並把 Lambda 換回確定沒問題的版本。步驟見[部署手冊第 5 節](deploy-runbook.md#5-設定自動部署) |
-| Neon 資料異常 | 剛發生的用 point-in-time restore；其餘從每週的 `pg_dump` 備份（存 S3，保留 4 份）還原 |
+| Neon 資料異常 | 剛發生的用 point-in-time restore；其餘從手動的 `pg_dump` 備份（存在本機 repo 外面，合併含新 migration 的 PR 前一定備份）還原，步驟見[部署手冊第 6 節](deploy-runbook.md#6-之後的更新) |
 
 ## 維護
 - **相依套件更新：** Dependabot 每週發 PR，CI 全綠才 merge
