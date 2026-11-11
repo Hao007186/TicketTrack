@@ -212,6 +212,11 @@ flowchart TB
 | 5 | Migration | 部署流程直接跑，Neon 直連網址放 GitHub Environment secret；不做 Neon 分支預演 |
 | 6 | 回滾 | 不自動回滾；手動 `deploy-lambdas.sh <上一版的 tag>`，只換程式不倒回 migration |
 
+## 2026-11-11 資料庫備份決策紀錄
+| # | 問題 | 決定 |
+|---|---|---|
+| 1 | 第二次審閱第 9 項的「每週 `pg_dump`」一直沒有實作 | 改成**手動備份**：合併含新 migration 的 PR 前一定備份，其他時候想到就做。用 Docker 的 `postgres:16` 跑 `pg_dump`，備份檔存在本機 repo 外面（含 Email 與密碼雜湊，repo 是公開的）。不做每週自動備份到 S3：資料量小，結構只在 migration 時變，最需要備份的就是那個時間點；之後有需要再做成小子專案 |
+
 ---
 
 ## 驗證方式（文件階段）
