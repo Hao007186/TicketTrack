@@ -193,6 +193,9 @@ async def refresh(session: AsyncSession, settings: Settings, *, refresh_token: s
         .returning(RefreshToken.id)
     )
     if claimed is None:
+        # 這張 token 在 SELECT 之後被刪掉（例如同時改密碼）不算重用，否則會連坐作廢新發的 token
+        if await session.scalar(select(RefreshToken.id).where(RefreshToken.id == token.id)) is None:
+            raise InvalidRefreshToken
         await _handle_reuse(session, user, now)
     # issue_tokens 會 commit，作廢舊 token 和發新 token 在同一個 transaction
     return await issue_tokens(session, settings, user)
