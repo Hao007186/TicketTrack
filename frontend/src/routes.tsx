@@ -3,11 +3,13 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { useAuth } from "./auth/context";
 import { Layout } from "./components/Layout";
 import { AdminPage } from "./pages/AdminPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { WatchDetailPage } from "./pages/WatchDetailPage";
 import { WatchFormPage } from "./pages/WatchFormPage";
@@ -27,6 +29,8 @@ export function AppRoutes() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route path="/watches" element={<WatchListPage />} />

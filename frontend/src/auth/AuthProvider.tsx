@@ -85,6 +85,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(null);
         });
       },
+      clearSession() {
+        setAccessToken(null);
+        queryClient.clear();
+        setUser(null);
+      },
     }),
     [user, signIn, queryClient, navigate],
   );

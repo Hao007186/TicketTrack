@@ -1,5 +1,6 @@
 """帳號流程的業務規則。失敗時丟出本模組的例外，由 router 轉成 HTTP 狀態碼。"""
 
+import math
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import NoReturn
@@ -26,8 +27,16 @@ class InvalidCredentials(Exception):
     pass
 
 
+class WrongPassword(Exception):
+    def __init__(self, remaining: int) -> None:
+        super().__init__(remaining)
+        self.remaining = remaining
+
+
 class AccountLocked(Exception):
-    pass
+    def __init__(self, minutes: int) -> None:
+        super().__init__(minutes)
+        self.minutes = minutes
 
 
 class InvalidRefreshToken(Exception):
@@ -97,8 +106,37 @@ async def register(
     return await issue_tokens(session, settings, user)
 
 
+def lock_minutes_left(locked_until: datetime, now: datetime) -> int:
+    """距離解鎖還有幾分鐘，無條件進位，最少 1。"""
+    seconds = (locked_until - now).total_seconds()
+    return max(1, math.ceil(seconds / 60))
+
+
+async def check_password(session: AsyncSession, user: User, password: str, now: datetime) -> None:
+    """驗證密碼並維護失敗次數與鎖定。呼叫端需已用 FOR UPDATE 取得 user。
+
+    密碼正確時只重設計數（不 commit，由呼叫端一併提交）。
+    """
+    if user.locked_until is not None and user.locked_until > now:
+        raise AccountLocked(lock_minutes_left(user.locked_until, now))
+
+    if not security.verify_password(password, user.password_hash):
+        user.failed_login_count += 1
+        if user.failed_login_count >= MAX_FAILED_LOGINS:
+            user.locked_until = now + LOCKOUT_DURATION
+            user.failed_login_count = 0
+            await session.commit()
+            raise AccountLocked(int(LOCKOUT_DURATION.total_seconds() // 60))
+        remaining = MAX_FAILED_LOGINS - user.failed_login_count
+        await session.commit()
+        raise WrongPassword(remaining)
+
+    user.failed_login_count = 0
+    user.locked_until = None
+
+
 async def login(
-    session: AsyncSession, settings: Settings, *, email: str, password: str
+    session: AsyncSession, settings: Settings, *, email: str, password: str, now: datetime
 ) -> TokenPair:
     # FOR UPDATE：同一帳號的登入依序處理，平行送出的錯誤密碼才不會讀到同一個失敗次數而少算；
     # populate_existing 確保拿到的是 DB 最新值，不是 session 裡的舊物件
@@ -112,24 +150,19 @@ async def login(
         security.verify_dummy_password(password)
         raise InvalidCredentials
 
-    now = datetime.now(UTC)
-    if user.locked_until is not None and user.locked_until > now:
-        raise AccountLocked
-
-    if not security.verify_password(password, user.password_hash):
-        user.failed_login_count += 1
-        if user.failed_login_count >= MAX_FAILED_LOGINS:
-            user.locked_until = now + LOCKOUT_DURATION
-            user.failed_login_count = 0
-        await session.commit()
-        raise InvalidCredentials
+    # 停用帳號與示範帳號不透露鎖定狀態與剩餘次數，一律當作 Email 或密碼錯誤
+    hidden = not user.is_active or user.is_demo
+    try:
+        await check_password(session, user, password, now)
+    except (WrongPassword, AccountLocked) as e:
+        if hidden:
+            raise InvalidCredentials from e
+        raise
 
     # 示範帳號只能走 POST /auth/demo
-    if not user.is_active or user.is_demo:
+    if hidden:
         raise InvalidCredentials
 
-    user.failed_login_count = 0
-    user.locked_until = None
     return await issue_tokens(session, settings, user)
 
 
@@ -160,6 +193,9 @@ async def refresh(session: AsyncSession, settings: Settings, *, refresh_token: s
         .returning(RefreshToken.id)
     )
     if claimed is None:
+        # 這張 token 在 SELECT 之後被刪掉（例如同時改密碼）不算重用，否則會連坐作廢新發的 token
+        if await session.scalar(select(RefreshToken.id).where(RefreshToken.id == token.id)) is None:
+            raise InvalidRefreshToken
         await _handle_reuse(session, user, now)
     # issue_tokens 會 commit，作廢舊 token 和發新 token 在同一個 transaction
     return await issue_tokens(session, settings, user)

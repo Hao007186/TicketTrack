@@ -50,4 +50,74 @@ describe("設定", () => {
     renderApp("/settings", { user: demo });
     expect(await screen.findByRole("switch", { name: "Email 通知" })).toBeDisabled();
   });
+
+  describe("修改密碼", () => {
+    async function fill(current: string, next: string, confirm: string) {
+      await userEvent.type(await screen.findByLabelText("目前密碼"), current);
+      await userEvent.type(screen.getByLabelText("新密碼"), next);
+      await userEvent.type(screen.getByLabelText("確認新密碼"), confirm);
+    }
+
+    it("修改密碼成功", async () => {
+      mockCommon();
+      mockSettings(true);
+      const bodies: unknown[] = [];
+      server.use(
+        http.post("/api/v1/me/password", async ({ request }) => {
+          bodies.push(await request.json());
+          return HttpResponse.json({ access_token: "new-token", token_type: "bearer" });
+        }),
+      );
+      renderApp("/settings");
+      await fill("old-password", "new-password-1", "new-password-1");
+      await userEvent.click(screen.getByRole("button", { name: "更新密碼" }));
+      expect(await screen.findByText("密碼已更新，其他裝置已登出")).toBeInTheDocument();
+      expect(bodies).toEqual([
+        { current_password: "old-password", new_password: "new-password-1" },
+      ]);
+      expect(screen.getByLabelText("目前密碼")).toHaveValue("");
+      expect(screen.getByLabelText("新密碼")).toHaveValue("");
+      expect(screen.getByLabelText("確認新密碼")).toHaveValue("");
+    });
+
+    it("目前密碼錯誤顯示後端訊息", async () => {
+      mockCommon();
+      mockSettings(true);
+      server.use(
+        http.post("/api/v1/me/password", () =>
+          HttpResponse.json({ detail: "目前的密碼錯誤，再錯 4 次會鎖定 15 分鐘" }, { status: 400 }),
+        ),
+      );
+      renderApp("/settings");
+      await fill("wrong-password", "new-password-1", "new-password-1");
+      await userEvent.click(screen.getByRole("button", { name: "更新密碼" }));
+      expect(
+        await screen.findByText("目前的密碼錯誤，再錯 4 次會鎖定 15 分鐘"),
+      ).toBeInTheDocument();
+    });
+
+    it("確認密碼不同", async () => {
+      mockCommon();
+      mockSettings(true);
+      let called = false;
+      server.use(
+        http.post("/api/v1/me/password", () => {
+          called = true;
+          return HttpResponse.json({ access_token: "x", token_type: "bearer" });
+        }),
+      );
+      renderApp("/settings");
+      await fill("old-password", "new-password-1", "new-password-2");
+      await userEvent.click(screen.getByRole("button", { name: "更新密碼" }));
+      expect(await screen.findByText("兩次輸入的密碼不一樣")).toBeInTheDocument();
+      expect(called).toBe(false);
+    });
+
+    it("示範帳號按鈕停用", async () => {
+      mockCommon();
+      mockSettings(true);
+      renderApp("/settings", { user: demo });
+      expect(await screen.findByRole("button", { name: "更新密碼" })).toBeDisabled();
+    });
+  });
 });

@@ -61,7 +61,7 @@ flowchart TB
 | M1 | MVP 上線：帳號、追蹤、查價、站內通知與 Email、前端、Terraform 部署 |
 | M2 | LINE 綁定與推播 |
 | M3 | k8s（kind + Helm）與 Playwright E2E |
-| M4 | 維運強化：完整監控、忘記密碼、LINE 登入、安全掃描 |
+| M4 | 維運強化：完整監控、LINE 登入、安全掃描 |
 
 詳細步驟見[階段 3〈實作順序〉](03-development.md#實作順序依里程碑)。
 
@@ -105,7 +105,7 @@ flowchart TB
 | 17 | refresh token cookie 沒有 CSRF 防護 | 加上 `Secure` 和 `SameSite=Strict` |
 | 18 | 幣別沒有定義 | v1 一律 TWD |
 | 19 | 公開端點沒有頻率限制，驗證信可能被濫發 | v1 不做，有需要再補；靠 SES 退信率／投訴率告警發現，處理方式寫進 runbook |
-| 20 | 忘記密碼是否提前到 M1 | 維持 M4 |
+| 20 | 忘記密碼是否提前到 M1 | 提前於 M1 後完成（2026-11-22） |
 | 21 | 降級期間「只用 Travelpayouts」和「只有 SerpApi 價格能觸發」互相矛盾 | 降級期間照發，但只限 `below_target`，並標註參考值；另外兩種原因暫停 |
 
 ## M0 實驗決策紀錄（2026-10-10）

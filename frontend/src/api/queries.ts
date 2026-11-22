@@ -7,6 +7,7 @@ import {
   type MutationState,
 } from "@tanstack/react-query";
 
+import { setAccessToken } from "../auth/token";
 import type { ReferenceConditions } from "../lib/watchForm";
 import { api, unwrap } from "./client";
 import type { components } from "./schema";
@@ -364,4 +365,14 @@ export function useAdminDeleteWatch() {
       }),
     ),
   );
+}
+
+// 表單自己顯示錯誤，所以設 silent；成功後換上新的 access token，這台裝置維持登入
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: async (body: { current_password: string; new_password: string }) =>
+      unwrap(await api.POST("/api/v1/me/password", { body })),
+    onSuccess: (data) => setAccessToken(data.access_token),
+    meta: { silent: true },
+  });
 }

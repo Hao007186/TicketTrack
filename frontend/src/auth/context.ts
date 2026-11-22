@@ -11,6 +11,8 @@ export type Auth = {
   register(email: string, password: string, displayName?: string): Promise<void>;
   loginDemo(): Promise<void>;
   logout(): Promise<void>;
+  /** 只清本機的登入狀態（不呼叫後端、不導頁），例如重設密碼後後端已撤銷所有登入 */
+  clearSession(): void;
 };
 
 export const AuthContext = createContext<Auth | null>(null);

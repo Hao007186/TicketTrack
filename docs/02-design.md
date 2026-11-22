@@ -178,7 +178,12 @@ stateDiagram-v2
 - **示範帳號**：`POST /auth/demo` 直接取得示範帳號的 session；除了登出和 refresh 以外，所有寫入 API 對示範帳號回 403；資料由 seed 腳本預先建立（多個追蹤 + 價格歷史 + 通知），不會被 checker 查價
 - LINE 綁定：`GET /me/line/link` → LINE 授權頁（`bot_prompt=aggressive` 引導加好友）→ callback 驗證 `state`（使用者 + 一次性 nonce）→ 寫入 `line_accounts`
   - LINE Login channel 和 Messaging API channel **必須建在同一個 Provider 底下**，兩邊的 `userId` 才會一致
-- v2：忘記密碼、LINE 登入（共用同一個 callback，用 `state` 區分）
+- **登入失敗提示**：密碼錯誤的訊息會顯示剩餘嘗試次數；鎖定時顯示還要等幾分鐘
+- **忘記密碼**（2026-11-22 提前於 M1 後完成）：`POST /api/v1/auth/password-reset/request` 申請、`POST /api/v1/auth/password-reset/confirm` 完成重設；前端頁面是 `/forgot-password` 與 `/reset-password`
+  - 重設連結存在 `password_reset_tokens` 資料表，30 分鐘內有效；同一個帳號 5 分鐘內最多寄 1 封
+  - 重設成功會解除帳號鎖定，並讓所有裝置登出
+- **修改密碼**：`POST /api/v1/me/password`，設定頁有對應的卡片；目前這台裝置維持登入，其他裝置全部登出
+- v2：LINE 登入（共用同一個 callback，用 `state` 區分）
 - 權限：資料一律檢查 owner；`admin` 只能看用量和統計
 
 **註冊到綁定 LINE 的時序：**

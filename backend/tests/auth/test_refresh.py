@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -129,3 +130,36 @@ async def test_concurrent_refresh_only_one_wins(
     assert (await refresh_with(client, a)).status_code == 401
     assert (await refresh_with(client, b)).status_code == 401
     assert stale is not None
+
+
+async def test_refresh_token_deleted_midway_is_not_reuse(
+    client: AsyncClient,
+    user: User,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    a = await _login_token(client)
+    b = await _login_token(client)
+
+    # 模擬 refresh 讀到 a 之後、條件式 UPDATE 之前，同時改密碼把 a 刪掉
+    original = db_session.execute
+    calls = 0
+
+    async def execute_then_delete(*args: Any, **kwargs: Any) -> Any:
+        nonlocal calls
+        result = await original(*args, **kwargs)
+        calls += 1
+        if calls == 1:
+            await original(
+                text("DELETE FROM refresh_tokens WHERE token_hash = :h"),
+                {"h": hash_refresh_token(a)},
+            )
+        return result
+
+    monkeypatch.setattr(db_session, "execute", execute_then_delete)
+    with pytest.raises(service.InvalidRefreshToken):
+        await service.refresh(db_session, get_settings(), refresh_token=a)
+    monkeypatch.undo()
+
+    # 沒有被當成重用：同一使用者的其他 token（例如剛發的新 token）仍然有效
+    assert (await refresh_with(client, b)).status_code == 200

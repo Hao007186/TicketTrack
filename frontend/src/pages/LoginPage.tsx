@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useSearchParams } from "react-router";
 
-import { errorMessage } from "../api/errors";
+import { ApiError, errorMessage } from "../api/errors";
 import { useAuth } from "../auth/context";
-import { buttonPrimary, card, errorBox, input, label } from "../components/ui";
+import { buttonPrimary, card, errorBox, input, label, successBox } from "../components/ui";
 import { safeNext } from "../lib/safeNext";
 
 export function LoginPage() {
@@ -12,6 +12,7 @@ export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // 登入成功後 user 有值，這裡就會導向原本要去的頁面
@@ -20,11 +21,13 @@ export function LoginPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setLocked(false);
     setSubmitting(true);
     try {
       await login(email, password);
     } catch (err) {
       setError(errorMessage(err));
+      setLocked(err instanceof ApiError && err.status === 423);
       setSubmitting(false);
     }
   }
@@ -33,7 +36,20 @@ export function LoginPage() {
   return (
     <AuthCard title="登入">
       <form onSubmit={onSubmit} className="space-y-4">
-        {error && <p className={errorBox}>{error}</p>}
+        {params.get("reset") === "1" && <p className={successBox}>密碼已重設，請用新密碼登入</p>}
+        {error && (
+          <p className={errorBox}>
+            {error}
+            {locked && (
+              <>
+                {" "}
+                <Link to="/forgot-password" className="font-medium underline">
+                  重設密碼
+                </Link>
+              </>
+            )}
+          </p>
+        )}
         <div>
           <label htmlFor="email" className={label}>
             Email
@@ -61,6 +77,11 @@ export function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
+          <p className="mt-1 text-right text-sm">
+            <Link to="/forgot-password" className="text-blue-600 hover:underline">
+              忘記密碼？
+            </Link>
+          </p>
         </div>
         <button type="submit" className={`${buttonPrimary} w-full`} disabled={submitting}>
           登入
