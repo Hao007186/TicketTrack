@@ -1,8 +1,16 @@
-import { useNotificationSettings, useUpdateNotificationSettings } from "../api/queries";
+import { useState, type FormEvent } from "react";
+
+import {
+  useChangePassword,
+  useNotificationSettings,
+  useUpdateNotificationSettings,
+} from "../api/queries";
+import { errorMessage } from "../api/errors";
 import { useAuth } from "../auth/context";
 import { QueryError } from "../components/QueryError";
-import { card } from "../components/ui";
+import { buttonPrimary, card, errorBox, input, label, successBox } from "../components/ui";
 import { WriteButton } from "../components/WriteButton";
+import { validateNewPassword } from "../lib/password";
 
 function EmailToggle() {
   const { data, error, refetch } = useNotificationSettings();
@@ -37,6 +45,87 @@ function EmailToggle() {
   );
 }
 
+function ChangePasswordForm() {
+  const change = useChangePassword();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setDone(false);
+    const problem = validateNewPassword(next, confirm);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setError(null);
+    change.mutate(
+      { current_password: current, new_password: next },
+      {
+        onSuccess: () => {
+          setCurrent("");
+          setNext("");
+          setConfirm("");
+          setDone(true);
+        },
+        onError: (err) => setError(errorMessage(err)),
+      },
+    );
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="max-w-sm space-y-4" noValidate>
+      {error && <p className={errorBox}>{error}</p>}
+      {done && <p className={successBox}>密碼已更新，其他裝置已登出</p>}
+      <div>
+        <label htmlFor="current-password" className={label}>
+          目前密碼
+        </label>
+        <input
+          id="current-password"
+          type="password"
+          autoComplete="current-password"
+          className={input}
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+        />
+      </div>
+      <div>
+        <label htmlFor="new-password" className={label}>
+          新密碼
+        </label>
+        <input
+          id="new-password"
+          type="password"
+          autoComplete="new-password"
+          className={input}
+          value={next}
+          onChange={(e) => setNext(e.target.value)}
+        />
+      </div>
+      <div>
+        <label htmlFor="confirm-new-password" className={label}>
+          確認新密碼
+        </label>
+        <input
+          id="confirm-new-password"
+          type="password"
+          autoComplete="new-password"
+          className={input}
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+        />
+      </div>
+      <WriteButton type="submit" className={buttonPrimary} disabled={change.isPending}>
+        更新密碼
+      </WriteButton>
+    </form>
+  );
+}
+
 export function SettingsPage() {
   const { user } = useAuth();
   return (
@@ -54,6 +143,10 @@ export function SettingsPage() {
       <section className={card}>
         <h2 className="mb-4 font-semibold">通知</h2>
         <EmailToggle />
+      </section>
+      <section className={card}>
+        <h2 className="mb-4 font-semibold">修改密碼</h2>
+        <ChangePasswordForm />
       </section>
     </div>
   );
