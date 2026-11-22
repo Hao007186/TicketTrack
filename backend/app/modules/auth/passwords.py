@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
@@ -42,7 +42,10 @@ def build_reset_email(to: str, token: str, base_url: str) -> EmailMessage:
 
 
 async def set_password(session: AsyncSession, user: User, new_password: str, now: datetime) -> None:
-    """設定新密碼並解除鎖定，作廢所有未使用的重設連結與所有登入。不 commit，由呼叫端提交。"""
+    """設定新密碼並解除鎖定，作廢未使用的重設連結、刪除所有登入（refresh token）。
+
+    不 commit，由呼叫端提交。
+    """
     user.password_hash = security.hash_password(new_password)
     user.failed_login_count = 0
     user.locked_until = None
@@ -51,11 +54,9 @@ async def set_password(session: AsyncSession, user: User, new_password: str, now
         .where(PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None))
         .values(used_at=now)
     )
-    await session.execute(
-        update(RefreshToken)
-        .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
-        .values(revoked_at=now)
-    )
+    # 用刪除而不是標記 revoked_at：舊 token 之後只會是「找不到」的一般 401，
+    # 不會被當成重用而連坐作廢剛發出的新 token
+    await session.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
 
 
 async def request_reset(
@@ -152,5 +153,5 @@ async def change_password(
         raise SamePassword
 
     await set_password(session, locked, new_password, now)
-    # issue_tokens 會 commit，改密碼、作廢舊登入與發新 token 在同一個 transaction
+    # issue_tokens 會 commit，改密碼、刪除舊登入與發新 token 在同一個 transaction
     return await service.issue_tokens(session, settings, locked)

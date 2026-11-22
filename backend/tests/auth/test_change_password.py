@@ -41,9 +41,8 @@ async def test_change_password_success(client: AsyncClient, db_session: AsyncSes
     assert "path=/api/v1/auth" in resp.headers["set-cookie"].lower()
 
     # 其他裝置被登出，這次回應給的新 refresh cookie 可用
-    # （先試新的：舊 token 被重用會觸發連坐作廢）
-    assert (await refresh_with(client, new_refresh)).status_code == 200
     assert (await refresh_with(client, second_refresh)).status_code == 401
+    assert (await refresh_with(client, new_refresh)).status_code == 200
 
     assert (await _login(client, OLD)).status_code == 401
     assert (await _login(client, NEW)).status_code == 200
