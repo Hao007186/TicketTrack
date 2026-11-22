@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
@@ -6,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.db.session import get_session
-from app.modules.auth import service
+from app.modules.auth import messages, service
 from app.modules.auth.schemas import LoginRequest, RegisterRequest, TokenResponse
 
 REFRESH_COOKIE = "refresh_token"
@@ -71,11 +72,17 @@ async def login(
     body: LoginRequest, response: Response, session: SessionDep, settings: SettingsDep
 ) -> TokenResponse:
     try:
-        pair = await service.login(session, settings, email=body.email, password=body.password)
+        pair = await service.login(
+            session, settings, email=body.email, password=body.password, now=datetime.now(UTC)
+        )
     except service.InvalidCredentials:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email 或密碼錯誤") from None
-    except service.AccountLocked:
-        raise HTTPException(status.HTTP_423_LOCKED, "登入失敗次數過多，請稍後再試") from None
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, messages.BAD_CREDENTIALS) from None
+    except service.WrongPassword as e:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, messages.wrong_password(e.remaining)
+        ) from None
+    except service.AccountLocked as e:
+        raise HTTPException(status.HTTP_423_LOCKED, messages.locked(e.minutes)) from None
     return _token_response(response, pair, settings)
 
 
