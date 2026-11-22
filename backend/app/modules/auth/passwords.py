@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.auth import security
+from app.core.config import Settings
+from app.modules.auth import security, service
 from app.modules.auth.models import PasswordResetToken, RefreshToken
 from app.modules.auth.service import get_user_by_email, normalize_email
 from app.modules.notifications.email import EmailError, EmailMessage, EmailSender
@@ -19,6 +20,10 @@ RESET_COOLDOWN = timedelta(minutes=5)
 
 
 class InvalidResetToken(Exception):
+    pass
+
+
+class SamePassword(Exception):
     pass
 
 
@@ -120,3 +125,32 @@ async def confirm_reset(
 
     await set_password(session, user, new_password, now)
     await session.commit()
+
+
+async def change_password(
+    session: AsyncSession,
+    settings: Settings,
+    user: User,
+    current_password: str,
+    new_password: str,
+    now: datetime,
+) -> service.TokenPair:
+    """驗證目前的密碼（錯誤會計入登入失敗次數）後改密碼，並登出所有裝置、發新的登入。"""
+    # FOR UPDATE + populate_existing：平行送出的錯誤密碼依序處理，才不會少算失敗次數
+    locked = await session.scalar(
+        select(User)
+        .where(User.id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    assert locked is not None
+    await service.check_password(session, locked, current_password, now)
+
+    if security.verify_password(new_password, locked.password_hash):
+        # 目前的密碼正確，失敗計數的重設一併提交並放掉鎖
+        await session.commit()
+        raise SamePassword
+
+    await set_password(session, locked, new_password, now)
+    # issue_tokens 會 commit，改密碼、作廢舊登入與發新 token 在同一個 transaction
+    return await service.issue_tokens(session, settings, locked)

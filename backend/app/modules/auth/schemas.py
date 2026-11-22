@@ -29,5 +29,11 @@ class PasswordResetConfirm(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class ChangePasswordRequest(BaseModel):
+    # 目前的密碼不限長度：格式不符的一律當成錯誤密碼處理
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class MessageResponse(BaseModel):
     detail: str
