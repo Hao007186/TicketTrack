@@ -80,7 +80,8 @@ model 放在 `app/modules/auth/models.py`，並在 `app/db/models.py` 註冊。
   - 作廢這個使用者所有的 refresh token（`revoked_at = now`）
 - 回 **204**，不發新的登入 token
 
-### 修改密碼：`POST /api/v1/auth/change-password`
+### 修改密碼：`POST /api/v1/me/password`
+- 不放在 `/auth/` 底下：前端的 `authFetch` 對 `/api/v1/auth/` 開頭的請求遇到 401 時不會自動 refresh，放在 `/me` 底下，設定頁開很久後送出也能正常運作。回應設定的 refresh cookie 仍然用 `path=/api/v1/auth`
 - 需要登入，使用 `WritableUser`（示範帳號回現有的 403「示範帳號為唯讀」）
 - body：`{ "current_password": str, "new_password": str(8～128) }`
 - 目前密碼錯誤：**跟登入共用同一個失敗計數**（`failed_login_count`、`locked_until`、5 次鎖 15 分鐘），回 **400**，訊息格式跟登入一樣帶剩餘次數；**觸發鎖定的第 5 次錯誤和已鎖定時都回 423**（跟登入一致，service 共用同一組例外）。理由：access token 被偷時，不能拿這個端點無限猜密碼
