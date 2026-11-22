@@ -223,6 +223,16 @@ TAG=$(git rev-parse --short HEAD)
 - [ ] SNS 訂閱已確認；Billing → Budgets 看得到 `farewatch-monthly`
 - [ ] 有問題時看 log：`MSYS_NO_PATHCONV=1 aws logs tail /aws/lambda/farewatch-api --since 10m`（jobs 換成 `farewatch-jobs`）
 
+### 忘記密碼驗收
+忘記密碼與修改密碼**不需要新增任何 AWS 資源**：API Lambda 已有 SES 寄信權限、SES 已解除沙盒、`APP_BASE_URL` 已設定；新增的 `password_reset_tokens` 資料表由 Alembic migration 建立，既有的部署工作流程會自動執行。部署後在正式站驗收：
+- [ ] 登入頁輸入錯誤密碼，訊息會顯示剩餘嘗試次數
+- [ ] 打開 `https://hao007186.com/forgot-password`，輸入已註冊的信箱送出
+- [ ] 信箱收到 `noreply@hao007186.com` 寄的重設信，連結是 `https://hao007186.com/reset-password?...`（30 分鐘內有效）
+- [ ] 5 分鐘內再申請一次，不會再收到第二封信
+- [ ] 點連結設定新密碼；用舊密碼登入失敗，用新密碼登入成功
+- [ ] 重設後其他裝置（或其他瀏覽器）已被登出
+- [ ] 登入後到設定頁修改密碼：目前這台維持登入，其他裝置被登出，之後只能用新密碼登入
+
 ## 5. 設定自動部署
 設定好之後，PR 合併進 `main`、CI 通過，GitHub Actions 的 **Deploy** 工作流程（`.github/workflows/deploy.yml`）就會自動部署：
 
