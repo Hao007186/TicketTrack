@@ -73,6 +73,18 @@ describe("重設密碼頁", () => {
     expect(screen.getByTestId("location")).toHaveTextContent("/forgot-password");
   });
 
+  it("伺服器錯誤時不顯示重新申請", async () => {
+    renderApp("/reset-password?token=abc", { user: null });
+    server.use(
+      http.post("/api/v1/auth/password-reset/confirm", () =>
+        HttpResponse.json({ detail: "boom" }, { status: 500 }),
+      ),
+    );
+    await fillReset("new-password-1", "new-password-1");
+    expect(await screen.findByText("連線失敗，請稍後再試")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "重新申請" })).not.toBeInTheDocument();
+  });
+
   it("沒有 token", async () => {
     renderApp("/reset-password", { user: null });
     expect(await screen.findByText("連結不完整")).toBeInTheDocument();

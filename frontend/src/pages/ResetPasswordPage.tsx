@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { api, unwrap } from "../api/client";
-import { errorMessage } from "../api/errors";
+import { ApiError, errorMessage } from "../api/errors";
 import { useAuth } from "../auth/context";
 import { buttonPrimary, errorBox, input, label } from "../components/ui";
 import { validateNewPassword } from "../lib/password";
@@ -57,7 +57,8 @@ export function ResetPasswordPage() {
       navigate("/login?reset=1", { replace: true });
     } catch (err) {
       setError(errorMessage(err));
-      setInvalid(true);
+      // 只有後端說 token 無效（400）才建議重新申請；5xx／網路錯誤時 token 仍有效，重新申請反而會被冷卻擋掉
+      setInvalid(err instanceof ApiError && err.status === 400);
       setSubmitting(false);
     }
   }
