@@ -1,17 +1,21 @@
+import asyncio
 import re
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
+from app.db.session import get_session
+from app.main import create_app
 from app.modules.auth import passwords
 from app.modules.auth.models import PasswordResetToken
 from app.modules.auth.passwords import InvalidResetToken
 from app.modules.notifications.deps import get_sender
+from app.modules.users.models import User
 from tests.auth.conftest import cookie_token, refresh_with
 from tests.conftest import create_user
 from tests.notifications.test_notifier import FakeSender
@@ -227,3 +231,33 @@ async def test_set_password_voids_tokens_and_unlocks(db_session: AsyncSession) -
     assert user.locked_until is None
     used = await db_session.scalar(select(PasswordResetToken.used_at))
     assert used == T0
+
+
+async def test_concurrent_confirm_only_one_succeeds(engine: AsyncEngine) -> None:
+    # 真的並行：兩個請求各用自己的連線，資料要先 commit，結束後手動清掉
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as seed:
+        user = await create_user(seed, email="concurrent-reset@example.com")
+        user_id = user.id
+        fake = FakeSender()
+        await passwords.request_reset(
+            seed, fake, BASE_URL, "concurrent-reset@example.com", datetime.now(UTC)
+        )
+        token = _token_from(fake)
+
+    app = create_app()
+
+    async def _own_session():  # type: ignore[no-untyped-def]
+        async with maker() as s:
+            yield s
+
+    app.dependency_overrides[get_session] = _own_session
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as c:
+            body = {"token": token, "new_password": NEW}
+            resps = await asyncio.gather(c.post(CONFIRM, json=body), c.post(CONFIRM, json=body))
+        assert sorted(r.status_code for r in resps) == [204, 400]
+    finally:
+        async with maker() as cleanup:
+            await cleanup.execute(delete(User).where(User.id == user_id))
+            await cleanup.commit()
