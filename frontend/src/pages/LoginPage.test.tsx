@@ -40,6 +40,40 @@ describe("登入頁", () => {
     expect(await screen.findByText("Email 或密碼錯誤")).toBeInTheDocument();
   });
 
+  it("有「忘記密碼？」連結", async () => {
+    renderApp("/login", { user: null });
+    await userEvent.click(await screen.findByRole("link", { name: "忘記密碼？" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/forgot-password");
+  });
+
+  it("423 時顯示重設連結，401 時沒有", async () => {
+    const LOCKED = "登入失敗次數過多，帳號已鎖定，請約 15 分鐘後再試，或使用忘記密碼重設";
+    renderApp("/login", { user: null });
+    server.use(
+      http.post("/api/v1/auth/login", () =>
+        HttpResponse.json({ detail: "Email 或密碼錯誤，還剩 2 次" }, { status: 401 }),
+      ),
+    );
+    await fillLogin("wrong-password");
+    expect(await screen.findByText("Email 或密碼錯誤，還剩 2 次")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "重設密碼" })).not.toBeInTheDocument();
+
+    server.use(
+      http.post("/api/v1/auth/login", () => HttpResponse.json({ detail: LOCKED }, { status: 423 })),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "登入" }));
+    expect(await screen.findByText(LOCKED)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "重設密碼" })).toHaveAttribute(
+      "href",
+      "/forgot-password",
+    );
+  });
+
+  it("reset=1 顯示成功提示", async () => {
+    renderApp("/login?reset=1", { user: null });
+    expect(await screen.findByText("密碼已重設，請用新密碼登入")).toBeInTheDocument();
+  });
+
   it("已登入時開登入頁會導到我的追蹤", async () => {
     mockCommon();
     mockWatches([]);

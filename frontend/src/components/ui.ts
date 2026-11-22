@@ -17,3 +17,5 @@ export const label = "mb-1 block text-sm font-medium text-slate-700";
 export const card = "rounded-xl border border-slate-200 bg-white p-5 shadow-sm";
 
 export const errorBox = "rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700";
+
+export const successBox = "rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700";
