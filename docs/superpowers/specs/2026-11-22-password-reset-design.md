@@ -77,7 +77,7 @@ model 放在 `app/modules/auth/models.py`，並在 `app/db/models.py` 註冊。
   - `password_hash` 改成新密碼的 Argon2 雜湊
   - `failed_login_count = 0`、`locked_until = NULL`（**被鎖住的帳號立刻解鎖**）
   - 作廢這個使用者的其他重設 token
-  - 作廢這個使用者所有的 refresh token（`revoked_at = now`）
+  - **刪除**這個使用者所有的 refresh token（不是標記 `revoked_at`：其他裝置拿舊 cookie 來時要走「找不到」的一般 401，不能進重用偵測，否則會連坐作廢同一使用者之後發的新 token）
 - 回 **204**，不發新的登入 token
 
 ### 修改密碼：`POST /api/v1/me/password`
@@ -86,7 +86,7 @@ model 放在 `app/modules/auth/models.py`，並在 `app/db/models.py` 註冊。
 - body：`{ "current_password": str, "new_password": str(8～128) }`
 - 目前密碼錯誤：**跟登入共用同一個失敗計數**（`failed_login_count`、`locked_until`、5 次鎖 15 分鐘），回 **400**，訊息格式跟登入一樣帶剩餘次數；**觸發鎖定的第 5 次錯誤和已鎖定時都回 423**（跟登入一致，service 共用同一組例外）。理由：access token 被偷時，不能拿這個端點無限猜密碼
 - 新密碼跟目前密碼一樣 → 400 `「新密碼不能和目前的密碼相同」`
-- 成功：更新雜湊、重設失敗計數、作廢這個使用者**所有**的 refresh token（包括目前這台），然後用 `issue_tokens` 發一組新的，回 200 `TokenResponse` 並設定 refresh cookie。結果是：**目前這台保持登入，其他裝置被登出**
+- 成功：更新雜湊、重設失敗計數、**刪除**這個使用者**所有**的 refresh token（包括目前這台；刪除而非標記 `revoked_at`，理由同上，避免其他裝置的舊 cookie 觸發重用偵測而登出目前這台），然後用 `issue_tokens` 發一組新的，回 200 `TokenResponse` 並設定 refresh cookie。結果是：**目前這台保持登入，其他裝置被登出**
 - 其他裝置手上還沒過期的 access token 最多再用 15 分鐘（`access_token_minutes`），接受
 
 ### 登入失敗提醒（改 `POST /auth/login`）
