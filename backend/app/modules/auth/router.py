@@ -7,8 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.db.session import get_session
-from app.modules.auth import messages, service
-from app.modules.auth.schemas import LoginRequest, RegisterRequest, TokenResponse
+from app.modules.auth import messages, passwords, service
+from app.modules.auth.schemas import (
+    LoginRequest,
+    MessageResponse,
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    RegisterRequest,
+    TokenResponse,
+)
+from app.modules.notifications.deps import SenderDep
 
 REFRESH_COOKIE = "refresh_token"
 # 只有呼叫 auth 端點時瀏覽器才會送出 refresh cookie
@@ -125,3 +133,26 @@ async def demo(response: Response, session: SessionDep, settings: SettingsDep) -
     except service.DemoUserMissing:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "示範帳號尚未建立") from None
     return _token_response(response, pair, settings)
+
+
+RESET_REQUEST_ACK = "如果這個 Email 有註冊，重設信已寄出，請在 30 分鐘內點信裡的連結"
+RESET_INVALID = "重設連結已失效或已使用，請重新申請"
+
+
+@router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED)
+async def password_reset_request(
+    body: PasswordResetRequest, session: SessionDep, settings: SettingsDep, sender: SenderDep
+) -> MessageResponse:
+    await passwords.request_reset(
+        session, sender, settings.app_base_url, body.email, datetime.now(UTC)
+    )
+    return MessageResponse(detail=RESET_REQUEST_ACK)
+
+
+@router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
+async def password_reset_confirm(body: PasswordResetConfirm, session: SessionDep) -> Response:
+    try:
+        await passwords.confirm_reset(session, body.token, body.new_password, datetime.now(UTC))
+    except passwords.InvalidResetToken:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, RESET_INVALID) from None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
